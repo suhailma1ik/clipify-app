@@ -403,7 +403,8 @@ fn quit_application(app: AppHandle) {
 
 // Function to clean and beautify text according to Clipify specifications
 fn cleanup_text(text: &str) -> String {
-    if text.is_empty() {
+    // Handle null, undefined, or empty text
+    if text.is_empty() || text.trim().is_empty() {
         return String::new();
     }
     
@@ -525,8 +526,13 @@ async fn copy_selected_text_to_clipboard(
         // Clean the text according to Clipify specifications
         let cleaned_text = cleanup_text(&new_text);
         
+        // Check if cleaned text is empty and return early if so
         if cleaned_text.is_empty() {
-            return Err("Copied text is empty after cleaning".to_string());
+            // Emit an event to notify the frontend about empty text
+            if let Err(e) = app.emit("clipboard-updated", "") {
+                println!("Failed to emit clipboard update event for empty text: {}", e);
+            }
+            return Ok("".to_string());
         }
         
         // Write cleaned text back to clipboard
