@@ -1,5 +1,3 @@
-import { ClipboardEntry } from '../types';
-
 // Text cleanup utility function
 export function cleanupText(text: string): string {
   if (!text) return "";

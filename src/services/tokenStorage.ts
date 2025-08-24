@@ -34,7 +34,7 @@ export class TokenStorageService {
    */
   private async initStore(): Promise<void> {
     try {
-      this.store = new Store(this.STORE_FILE);
+      this.store = await Store.load(this.STORE_FILE);
     } catch (error) {
       console.error('Failed to initialize token storage:', error);
       throw new Error('Token storage initialization failed');

@@ -5,7 +5,6 @@ import {
   getEnvVar,
   environmentConfig
 } from '../services/environmentService';
-import { Environment } from '../types/environment';
 
 describe('Environment Service', () => {
   const originalEnv = process.env;

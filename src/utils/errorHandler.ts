@@ -326,6 +326,30 @@ export class AuthErrorHandler {
       [AuthErrorType.BACKEND_ERROR]: {
         title: 'Server Error',
         actions: ['Try Again', 'Report Issue']
+      },
+      [AuthErrorType.INVALID_STATE]: {
+        title: 'Security Error',
+        actions: ['Try Again']
+      },
+      [AuthErrorType.EXPIRED_CODE]: {
+        title: 'Session Expired',
+        actions: ['Try Again']
+      },
+      [AuthErrorType.INVALID_TOKEN]: {
+        title: 'Invalid Token',
+        actions: ['Log In Again']
+      },
+      [AuthErrorType.DEEP_LINK_ERROR]: {
+        title: 'Link Error',
+        actions: ['Try Again']
+      },
+      [AuthErrorType.OAUTH_ERROR]: {
+        title: 'Authentication Error',
+        actions: ['Try Again']
+      },
+      [AuthErrorType.UNKNOWN_ERROR]: {
+        title: 'Unknown Error',
+        actions: ['Dismiss']
       }
     };
 

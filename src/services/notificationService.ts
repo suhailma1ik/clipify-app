@@ -18,7 +18,7 @@ export interface NotificationOptions {
   body: string;
   type?: NotificationType;
   icon?: string;
-  sound?: boolean;
+  sound?: string;
   persistent?: boolean;
 }
 
@@ -75,7 +75,7 @@ export class NotificationService {
         title: options.title,
         body: options.body,
         icon: options.icon || this.getDefaultIcon(options.type),
-        sound: options.sound !== false // Default to true
+        sound: options.sound || undefined // Use the sound string or undefined
       });
 
       console.log('Notification sent:', options.title);
@@ -96,7 +96,7 @@ export class NotificationService {
       title,
       body,
       type: NotificationType.SUCCESS,
-      sound: true
+      sound: 'default'
     });
   }
 
@@ -108,8 +108,7 @@ export class NotificationService {
       title,
       body,
       type: NotificationType.ERROR,
-      sound: true,
-      persistent: true
+      sound: 'default'
     });
   }
 
@@ -121,7 +120,7 @@ export class NotificationService {
       title,
       body,
       type: NotificationType.WARNING,
-      sound: true
+      sound: 'default'
     });
   }
 
@@ -133,7 +132,7 @@ export class NotificationService {
       title,
       body,
       type: NotificationType.INFO,
-      sound: false
+      sound: undefined
     });
   }
 
@@ -176,7 +175,7 @@ export class NotificationService {
   /**
    * Get default icon based on notification type
    */
-  private getDefaultIcon(type?: NotificationType): string | undefined {
+  private getDefaultIcon(_type?: NotificationType): string | undefined {
     // Return undefined to use system default icons
     // In the future, this could return paths to custom icons
     return undefined;
@@ -215,7 +214,7 @@ export class NotificationService {
       body,
       type: NotificationType.ERROR,
       persistent: true,
-      sound: true
+      sound: 'default'
     });
   }
 
@@ -227,7 +226,7 @@ export class NotificationService {
       title,
       body,
       type: NotificationType.INFO,
-      sound: false
+      sound: undefined
     });
   }
 }

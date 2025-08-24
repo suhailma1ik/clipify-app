@@ -1,6 +1,5 @@
 import { open } from '@tauri-apps/plugin-shell';
 import { getEnvironmentConfig } from './environmentService';
-import { OAuthConfig as EnvironmentOAuthConfig } from '../types/environment';
 
 /**
  * OAuth configuration interface

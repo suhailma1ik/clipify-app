@@ -2,7 +2,6 @@ import { fetch } from '@tauri-apps/plugin-http';
 import { JWTTokenData } from './tokenStorage';
 import { oauthService } from './oauthService';
 import { getEnvironmentConfig } from './environmentService';
-import { ApiConfig as EnvironmentApiConfig } from '../types/environment';
 
 /**
  * Interface for desktop auth exchange request
@@ -172,7 +171,7 @@ export class TokenExchangeService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Token refresh failed:', response.status, errorText);
-        throw new Error(`Token refresh failed: HTTP ${response.status}`);
+        throw new Error(`Token refresh failed: HTTP ${response.status} - ${errorText}`);
       }
 
       const authResponse: DesktopAuthResponse = await response.json();
@@ -258,7 +257,7 @@ export class TokenExchangeService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to fetch user profile: HTTP ${response.status}`);
+        throw new Error(`Failed to fetch user profile: HTTP ${response.status} - ${errorText}`);
       }
 
       const userProfile = await response.json();
