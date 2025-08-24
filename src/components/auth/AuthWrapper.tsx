@@ -64,6 +64,8 @@ const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry, onClear }) 
  * Routes between landing page and main app based on auth state
  */
 export const AuthWrapper: React.FC = () => {
+  console.log('[AuthWrapper] Component rendered');
+  
   const { 
     isAuthenticated, 
     isLoading, 
@@ -71,14 +73,18 @@ export const AuthWrapper: React.FC = () => {
     login, 
     clearError 
   } = useAuth();
+  
+  console.log('[AuthWrapper] Auth state - isAuthenticated:', isAuthenticated, 'isLoading:', isLoading, 'error:', error?.message);
 
   // Show loading spinner during initialization
   if (isLoading) {
+    console.log('[AuthWrapper] Showing loading spinner');
     return <LoadingSpinner />;
   }
 
   // Show error if authentication failed
   if (error) {
+    console.log('[AuthWrapper] Showing error display');
     return (
       <ErrorDisplay 
         error={error} 
@@ -90,18 +96,21 @@ export const AuthWrapper: React.FC = () => {
 
   // Show main app if authenticated
   if (isAuthenticated) {
+    console.log('[AuthWrapper] Showing main application');
     return <App />;
   }
 
   // Show landing page if not authenticated
+  console.log('[AuthWrapper] Showing landing page');
   return (
     <LandingPage 
       onAuthStart={() => {
+        console.log('[AuthWrapper] Auth start callback triggered');
         // Clear any previous errors when starting auth
         clearError();
       }}
       onAuthError={(errorMessage) => {
-        console.error('Auth error from landing page:', errorMessage);
+        console.error('[AuthWrapper] Auth error callback triggered:', errorMessage);
         // Error will be handled by AuthContext
       }}
     />

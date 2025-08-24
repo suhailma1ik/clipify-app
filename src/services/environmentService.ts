@@ -1,26 +1,38 @@
 /**
- * Environment Service
- * Centralized configuration management for different environments
- */
-
-import { Environment, EnvironmentConfig, OAuthConfig, ApiConfig } from '../types/environment';
-
-/**
  * Detect current environment
  * @returns Current environment
  */
 export const detectEnvironment = (): Environment => {
+  console.log('[EnvironmentService] Detecting environment');
+  
   // Check for explicit environment variable
   const envVar = import.meta.env.VITE_ENVIRONMENT;
-  if (envVar === 'production') return 'production';
-  if (envVar === 'development') return 'development';
+  console.log('[EnvironmentService] VITE_ENVIRONMENT:', envVar);
+  
+  if (envVar === 'production') {
+    console.log('[EnvironmentService] Detected production environment from VITE_ENVIRONMENT');
+    return 'production';
+  }
+  if (envVar === 'development') {
+    console.log('[EnvironmentService] Detected development environment from VITE_ENVIRONMENT');
+    return 'development';
+  }
   
   // Check NODE_ENV
   const nodeEnv = import.meta.env.NODE_ENV;
-  if (nodeEnv === 'production') return 'production';
-  if (nodeEnv === 'development') return 'development';
+  console.log('[EnvironmentService] NODE_ENV:', nodeEnv);
+  
+  if (nodeEnv === 'production') {
+    console.log('[EnvironmentService] Detected production environment from NODE_ENV');
+    return 'production';
+  }
+  if (nodeEnv === 'development') {
+    console.log('[EnvironmentService] Detected development environment from NODE_ENV');
+    return 'development';
+  }
   
   // Default to development
+  console.log('[EnvironmentService] Defaulting to development environment');
   return 'development';
 };
 
@@ -30,18 +42,24 @@ export const detectEnvironment = (): Environment => {
  * @returns Frontend configuration
  */
 const getFrontendConfig = (environment: Environment) => {
+  console.log('[EnvironmentService] Getting frontend config for environment:', environment);
+  
   if (environment === 'production') {
-    return {
+    const config = {
       baseUrl: import.meta.env.VITE_PROD_BASE_URL || 'https://clipify.space/',
       port: parseInt(import.meta.env.VITE_PROD_PORT || '5173')
     };
+    console.log('[EnvironmentService] Production frontend config:', config);
+    return config;
   }
   
   // Development configuration
-  return {
+  const config = {
     baseUrl: import.meta.env.VITE_DEV_BASE_URL || 'http://localhost:5173/',
     port: parseInt(import.meta.env.VITE_DEV_PORT || '5173')
   };
+  console.log('[EnvironmentService] Development frontend config:', config);
+  return config;
 };
 
 /**
@@ -50,18 +68,24 @@ const getFrontendConfig = (environment: Environment) => {
  * @returns API configuration
  */
 const getApiConfig = (environment: Environment): ApiConfig => {
+  console.log('[EnvironmentService] Getting API config for environment:', environment);
+  
   if (environment === 'production') {
-    return {
+    const config = {
       baseUrl: import.meta.env.VITE_PROD_API_BASE_URL || 'https://clipify.space',
       timeout: parseInt(import.meta.env.VITE_PROD_API_TIMEOUT || '30000')
     };
+    console.log('[EnvironmentService] Production API config:', config);
+    return config;
   }
   
   // Development configuration
-  return {
+  const config = {
     baseUrl: import.meta.env.VITE_DEV_API_BASE_URL || 'http://localhost:8080',
     timeout: parseInt(import.meta.env.VITE_DEV_API_TIMEOUT || '10000')
   };
+  console.log('[EnvironmentService] Development API config:', config);
+  return config;
 };
 
 /**
@@ -70,22 +94,28 @@ const getApiConfig = (environment: Environment): ApiConfig => {
  * @returns OAuth configuration
  */
 const getOAuthConfig = (environment: Environment): OAuthConfig => {
+  console.log('[EnvironmentService] Getting OAuth config for environment:', environment);
+  
   if (environment === 'production') {
-    return {
+    const config = {
       baseUrl: import.meta.env.VITE_PROD_OAUTH_BASE_URL || 'https://clipify.space/api/v1/auth/google/login',
       clientId: import.meta.env.VITE_PROD_OAUTH_CLIENT_ID || 'clipify-desktop',
       redirectUri: import.meta.env.VITE_PROD_OAUTH_REDIRECT_URI || 'clipify://auth/callback',
       scope: import.meta.env.VITE_PROD_OAUTH_SCOPE || 'openid email profile'
     };
+    console.log('[EnvironmentService] Production OAuth config:', config);
+    return config;
   }
   
   // Development configuration
-  return {
+  const config = {
     baseUrl: import.meta.env.VITE_DEV_OAUTH_BASE_URL || 'http://localhost:8080/api/v1/auth/google/login',
     clientId: import.meta.env.VITE_DEV_OAUTH_CLIENT_ID || 'clipify-desktop',
     redirectUri: import.meta.env.VITE_DEV_OAUTH_REDIRECT_URI || 'clipify://auth/callback',
     scope: import.meta.env.VITE_DEV_OAUTH_SCOPE || 'openid email profile'
   };
+  console.log('[EnvironmentService] Development OAuth config:', config);
+  return config;
 };
 
 /**
@@ -94,18 +124,24 @@ const getOAuthConfig = (environment: Environment): OAuthConfig => {
  * @returns Tauri configuration
  */
 const getTauriConfig = (environment: Environment) => {
+  console.log('[EnvironmentService] Getting Tauri config for environment:', environment);
+  
   if (environment === 'production') {
-    return {
+    const config = {
       port: parseInt(import.meta.env.VITE_PROD_TAURI_PORT || '1420'),
       hmrPort: parseInt(import.meta.env.VITE_PROD_TAURI_HMR_PORT || '1421')
     };
+    console.log('[EnvironmentService] Production Tauri config:', config);
+    return config;
   }
   
   // Development configuration
-  return {
+  const config = {
     port: parseInt(import.meta.env.VITE_DEV_TAURI_PORT || '1420'),
     hmrPort: parseInt(import.meta.env.VITE_DEV_TAURI_HMR_PORT || '1421')
   };
+  console.log('[EnvironmentService] Development Tauri config:', config);
+  return config;
 };
 
 /**
@@ -114,12 +150,18 @@ const getTauriConfig = (environment: Environment) => {
  * @returns Logging level
  */
 const getLogLevel = (environment: Environment) => {
+  console.log('[EnvironmentService] Getting log level for environment:', environment);
+  
   if (environment === 'production') {
-    return import.meta.env.VITE_PROD_LOG_LEVEL || 'info';
+    const level = import.meta.env.VITE_PROD_LOG_LEVEL || 'info';
+    console.log('[EnvironmentService] Production log level:', level);
+    return level;
   }
   
   // Development configuration
-  return import.meta.env.VITE_DEV_LOG_LEVEL || 'debug';
+  const level = import.meta.env.VITE_DEV_LOG_LEVEL || 'debug';
+  console.log('[EnvironmentService] Development log level:', level);
+  return level;
 };
 
 /**
@@ -129,8 +171,9 @@ const getLogLevel = (environment: Environment) => {
  */
 export const getEnvironmentConfig = (environment?: Environment): EnvironmentConfig => {
   const env = environment || detectEnvironment();
+  console.log('[EnvironmentService] Getting environment config for:', env);
   
-  return {
+  const config = {
     environment: env,
     frontend: getFrontendConfig(env),
     api: getApiConfig(env),
@@ -138,27 +181,26 @@ export const getEnvironmentConfig = (environment?: Environment): EnvironmentConf
     tauri: getTauriConfig(env),
     logLevel: getLogLevel(env) as 'debug' | 'info' | 'warn' | 'error'
   };
-};
-
-/**
- * Get environment-specific variable
- * @param key Variable key
- * @param environment Optional environment to use, otherwise auto-detect
- * @returns Environment variable value
- */
-export const getEnvVar = (key: string, environment?: Environment): string | undefined => {
-  const env = environment || detectEnvironment();
-  const prefix = env === 'production' ? 'VITE_PROD_' : 'VITE_DEV_';
-  return import.meta.env[`${prefix}${key}`];
+  
+  console.log('[EnvironmentService] Complete environment config:', {
+    ...config,
+    // Redact sensitive information
+    oauth: {
+      ...config.oauth,
+      clientId: '[REDACTED]'
+    }
+  });
+  
+  return config;
 };
 
 // Export singleton instance with current environment config
 export const environmentConfig = getEnvironmentConfig();
-
-// Export utility functions
-export default {
-  detectEnvironment,
-  getEnvironmentConfig,
-  getEnvVar,
-  environmentConfig
-};
+console.log('[EnvironmentService] Environment config initialized:', {
+  ...environmentConfig,
+  // Redact sensitive information
+  oauth: {
+    ...environmentConfig.oauth,
+    clientId: '[REDACTED]'
+  }
+});

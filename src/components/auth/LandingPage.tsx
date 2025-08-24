@@ -21,26 +21,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<'login' | 'signup' | null>(null);
 
+  console.log('[LandingPage] Component rendered');
+
   /**
    * Handle login button click
    */
   const handleLogin = async () => {
-    if (isLoading) return;
+    console.log('[LandingPage] Login button clicked');
+    
+    if (isLoading) {
+      console.log('[LandingPage] Already loading, ignoring click');
+      return;
+    }
     
     setIsLoading(true);
     setLoadingAction('login');
     onAuthStart?.();
+    console.log('[LandingPage] Auth start callback called');
 
     try {
-      console.log('Starting login flow...');
+      console.log('[LandingPage] Starting login flow...');
       await oauthService.launchOAuthFlow(false);
+      console.log('[LandingPage] Login flow launched successfully');
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('[LandingPage] Login failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to start login process';
+      console.error('[LandingPage] Login error message:', errorMessage);
       onAuthError?.(errorMessage);
     } finally {
       setIsLoading(false);
       setLoadingAction(null);
+      console.log('[LandingPage] Login flow completed');
     }
   };
 
@@ -48,22 +59,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({
    * Handle signup button click
    */
   const handleSignup = async () => {
-    if (isLoading) return;
+    console.log('[LandingPage] Signup button clicked');
+    
+    if (isLoading) {
+      console.log('[LandingPage] Already loading, ignoring click');
+      return;
+    }
     
     setIsLoading(true);
     setLoadingAction('signup');
     onAuthStart?.();
+    console.log('[LandingPage] Auth start callback called');
 
     try {
-      console.log('Starting signup flow...');
+      console.log('[LandingPage] Starting signup flow...');
       await oauthService.launchOAuthFlow(true);
+      console.log('[LandingPage] Signup flow launched successfully');
     } catch (error) {
-      console.error('Signup failed:', error);
+      console.error('[LandingPage] Signup failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to start signup process';
+      console.error('[LandingPage] Signup error message:', errorMessage);
       onAuthError?.(errorMessage);
     } finally {
       setIsLoading(false);
       setLoadingAction(null);
+      console.log('[LandingPage] Signup flow completed');
     }
   };
 

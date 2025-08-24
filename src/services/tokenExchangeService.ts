@@ -1,56 +1,3 @@
-import { fetch } from '@tauri-apps/plugin-http';
-import { JWTTokenData } from './tokenStorage';
-import { oauthService } from './oauthService';
-import { getEnvironmentConfig } from './environmentService';
-
-/**
- * Interface for desktop auth exchange request
- */
-export interface DesktopAuthRequest {
-  authCode: string;
-  state: string;
-  codeVerifier?: string;
-}
-
-/**
- * Interface for desktop auth exchange response
- */
-export interface DesktopAuthResponse {
-  success: boolean;
-  token: string;
-  refreshToken?: string;
-  expiresIn: number;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    picture?: string;
-    plan: 'free' | 'pro' | 'enterprise';
-  };
-}
-
-/**
- * Interface for token refresh request
- */
-export interface TokenRefreshRequest {
-  refreshToken: string;
-}
-
-/**
- * Interface for token validation request
- */
-export interface TokenValidationRequest {
-  token: string;
-}
-
-/**
- * Interface for API configuration
- */
-export interface ApiConfig {
-  baseUrl: string;
-  timeout: number;
-}
-
 /**
  * Token exchange service for desktop OAuth flow
  * Handles communication with backend API for authentication
@@ -60,6 +7,7 @@ export class TokenExchangeService {
 
   constructor(config: ApiConfig) {
     this.config = config;
+    console.log('[TokenExchangeService] Initialized with config:', config);
   }
 
   /**
@@ -69,11 +17,14 @@ export class TokenExchangeService {
    * @returns JWT token data
    */
   async exchangeCodeForToken(authCode: string, state: string): Promise<JWTTokenData> {
-    console.log('Exchanging authorization code for JWT token...');
+    console.log('[TokenExchangeService] Exchanging authorization code for JWT token');
+    console.log('[TokenExchangeService] Auth code:', authCode.substring(0, 10) + '...');
+    console.log('[TokenExchangeService] State:', state.substring(0, 10) + '...');
 
     try {
       // Get PKCE code verifier if available
       const codeVerifier = oauthService.getCodeVerifier();
+      console.log('[TokenExchangeService] Code verifier:', codeVerifier ? codeVerifier.substring(0, 10) + '...' : 'null');
       
       const requestBody: DesktopAuthRequest = {
         authCode,
@@ -81,7 +32,12 @@ export class TokenExchangeService {
         ...(codeVerifier && { codeVerifier })
       };
 
-      console.log('Making token exchange request to:', `${this.config.baseUrl}/api/v1/auth/desktop/exchange`);
+      console.log('[TokenExchangeService] Making token exchange request to:', `${this.config.baseUrl}/api/v1/auth/desktop/exchange`);
+      console.log('[TokenExchangeService] Request body:', {
+        ...requestBody,
+        authCode: requestBody.authCode.substring(0, 10) + '...',
+        ...(requestBody.codeVerifier && { codeVerifier: requestBody.codeVerifier.substring(0, 10) + '...' })
+      });
 
       const response = await fetch(`${this.config.baseUrl}/api/v1/auth/desktop/exchange`, {
         method: 'POST',
@@ -93,15 +49,18 @@ export class TokenExchangeService {
         connectTimeout: this.config.timeout
       });
 
+      console.log('[TokenExchangeService] Token exchange response status:', response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Token exchange failed:', response.status, errorText);
+        console.error('[TokenExchangeService] Token exchange failed:', response.status, errorText);
         
         // Parse error response if possible
         let errorMessage = 'Token exchange failed';
         try {
           const errorData = JSON.parse(errorText);
           errorMessage = errorData.error || errorData.message || errorMessage;
+          console.error('[TokenExchangeService] Parsed error data:', errorData);
         } catch {
           errorMessage = `HTTP ${response.status}: ${errorText || 'Unknown error'}`;
         }
@@ -110,18 +69,27 @@ export class TokenExchangeService {
       }
 
       const authResponse: DesktopAuthResponse = await response.json();
+      console.log('[TokenExchangeService] Token exchange response:', {
+        success: authResponse.success,
+        token: authResponse.token ? authResponse.token.substring(0, 10) + '...' : null,
+        refreshToken: authResponse.refreshToken ? authResponse.refreshToken.substring(0, 10) + '...' : null,
+        expiresIn: authResponse.expiresIn,
+        user: authResponse.user ? { ...authResponse.user, email: '[REDACTED]' } : null
+      });
       
       if (!authResponse.success) {
+        console.error('[TokenExchangeService] Authentication failed - invalid response');
         throw new Error('Authentication failed - invalid response');
       }
 
-      console.log('Token exchange successful');
+      console.log('[TokenExchangeService] Token exchange successful');
       
       // Clear PKCE code verifier after successful exchange
       oauthService.clearCodeVerifier();
 
       // Calculate token expiry timestamp
       const expiresAt = Math.floor(Date.now() / 1000) + authResponse.expiresIn;
+      console.log('[TokenExchangeService] Token expires at:', new Date(expiresAt * 1000).toISOString());
 
       const tokenData: JWTTokenData = {
         token: authResponse.token,
@@ -130,9 +98,10 @@ export class TokenExchangeService {
         user: authResponse.user
       };
 
+      console.log('[TokenExchangeService] Returning token data');
       return tokenData;
     } catch (error) {
-      console.error('Token exchange error:', error);
+      console.error('[TokenExchangeService] Token exchange error:', error);
       
       // Clean up PKCE verifier on error
       oauthService.clearCodeVerifier();
@@ -151,13 +120,16 @@ export class TokenExchangeService {
    * @returns New JWT token data
    */
   async refreshToken(refreshToken: string): Promise<JWTTokenData> {
-    console.log('Refreshing JWT token...');
+    console.log('[TokenExchangeService] Refreshing JWT token');
+    console.log('[TokenExchangeService] Refresh token:', refreshToken.substring(0, 10) + '...');
 
     try {
       const requestBody: TokenRefreshRequest = {
         refreshToken
       };
 
+      console.log('[TokenExchangeService] Making token refresh request to:', `${this.config.baseUrl}/api/v1/auth/refresh`);
+      
       const response = await fetch(`${this.config.baseUrl}/api/v1/auth/refresh`, {
         method: 'POST',
         headers: {
@@ -168,22 +140,33 @@ export class TokenExchangeService {
         connectTimeout: this.config.timeout
       });
 
+      console.log('[TokenExchangeService] Token refresh response status:', response.status);
+
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Token refresh failed:', response.status, errorText);
+        console.error('[TokenExchangeService] Token refresh failed:', response.status, errorText);
         throw new Error(`Token refresh failed: HTTP ${response.status} - ${errorText}`);
       }
 
       const authResponse: DesktopAuthResponse = await response.json();
+      console.log('[TokenExchangeService] Token refresh response:', {
+        success: authResponse.success,
+        token: authResponse.token ? authResponse.token.substring(0, 10) + '...' : null,
+        refreshToken: authResponse.refreshToken ? authResponse.refreshToken.substring(0, 10) + '...' : null,
+        expiresIn: authResponse.expiresIn,
+        user: authResponse.user ? { ...authResponse.user, email: '[REDACTED]' } : null
+      });
       
       if (!authResponse.success) {
+        console.error('[TokenExchangeService] Token refresh failed - invalid response');
         throw new Error('Token refresh failed - invalid response');
       }
 
-      console.log('Token refresh successful');
+      console.log('[TokenExchangeService] Token refresh successful');
 
       // Calculate token expiry timestamp
       const expiresAt = Math.floor(Date.now() / 1000) + authResponse.expiresIn;
+      console.log('[TokenExchangeService] New token expires at:', new Date(expiresAt * 1000).toISOString());
 
       const tokenData: JWTTokenData = {
         token: authResponse.token,
@@ -192,9 +175,10 @@ export class TokenExchangeService {
         user: authResponse.user
       };
 
+      console.log('[TokenExchangeService] Returning refreshed token data');
       return tokenData;
     } catch (error) {
-      console.error('Token refresh error:', error);
+      console.error('[TokenExchangeService] Token refresh error:', error);
       
       if (error instanceof Error) {
         throw error;
@@ -210,9 +194,16 @@ export class TokenExchangeService {
    * @returns True if token is valid
    */
   async validateToken(token: string): Promise<boolean> {
-    try {
-      console.log('Validating JWT token with backend...');
+    console.log('[TokenExchangeService] Validating token');
+    console.log('[TokenExchangeService] Token:', token.substring(0, 10) + '...');
 
+    try {
+      const requestBody: TokenValidationRequest = {
+        token
+      };
+
+      console.log('[TokenExchangeService] Making token validation request to:', `${this.config.baseUrl}/api/v1/auth/validate`);
+      
       const response = await fetch(`${this.config.baseUrl}/api/v1/auth/validate`, {
         method: 'POST',
         headers: {
@@ -220,40 +211,34 @@ export class TokenExchangeService {
           'Authorization': `Bearer ${token}`,
           'User-Agent': 'Clipify Desktop/1.0'
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify(requestBody),
         connectTimeout: this.config.timeout
       });
 
-      if (response.ok) {
-        const validationResult = await response.json();
-        console.log('Token validation response:', validationResult);
-        
-        // Check both success and valid flags
-        const isValid = validationResult.success === true && validationResult.valid === true;
-        console.log('Token validation result:', isValid);
-        
-        return isValid;
-      } else {
-        const errorText = await response.text();
-        console.log('Token validation failed:', response.status, errorText);
-        return false;
-      }
+      console.log('[TokenExchangeService] Token validation response status:', response.status);
+      
+      const isValid = response.ok;
+      console.log('[TokenExchangeService] Token validation result:', isValid);
+      
+      return isValid;
     } catch (error) {
-      console.error('Token validation error:', error);
+      console.error('[TokenExchangeService] Token validation error:', error);
       return false;
     }
   }
 
   /**
-   * Get user profile information using JWT token
-   * @param token - Valid JWT token
+   * Get user profile information
+   * @param token - JWT token for authentication
    * @returns User profile data
    */
-  async getUserProfile(token: string): Promise<JWTTokenData['user']> {
+  async getUserProfile(token: string): Promise<{ id: string; email: string; name: string; picture?: string; plan: string } | null> {
+    console.log('[TokenExchangeService] Fetching user profile');
+    
     try {
-      console.log('Fetching user profile...');
-
-      const response = await fetch(`${this.config.baseUrl}/api/v1/protected/me`, {
+      console.log('[TokenExchangeService] Making user profile request to:', `${this.config.baseUrl}/api/v1/users/profile`);
+      
+      const response = await fetch(`${this.config.baseUrl}/api/v1/users/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -262,99 +247,44 @@ export class TokenExchangeService {
         connectTimeout: this.config.timeout
       });
 
+      console.log('[TokenExchangeService] User profile response status:', response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to fetch user profile: HTTP ${response.status} - ${errorText}`);
+        console.error('[TokenExchangeService] User profile fetch failed:', response.status, errorText);
+        return null;
       }
 
-      const userProfile = await response.json();
-      console.log('User profile fetched successfully');
+      const userData = await response.json();
+      console.log('[TokenExchangeService] User profile response:', { ...userData, email: '[REDACTED]' });
       
-      return userProfile;
+      return userData;
     } catch (error) {
-      console.error('User profile fetch error:', error);
-      
-      if (error instanceof Error) {
-        throw error;
-      }
-      
-      throw new Error('Failed to fetch user profile');
+      console.error('[TokenExchangeService] User profile fetch error:', error);
+      return null;
     }
   }
 
   /**
-   * Test API connectivity
-   * @returns True if API is reachable
+   * Test connection to the authentication server
+   * @returns True if connection is successful
    */
   async testConnection(): Promise<boolean> {
+    console.log('[TokenExchangeService] Testing connection to auth server');
+    console.log('[TokenExchangeService] Testing connection to:', `${this.config.baseUrl}/api/v1/health`);
+    
     try {
-      console.log('Testing API connectivity...');
-
-      const response = await fetch(`${this.config.baseUrl}/health`, {
+      const response = await fetch(`${this.config.baseUrl}/api/v1/health`, {
         method: 'GET',
-        headers: {
-          'User-Agent': 'Clipify Desktop/1.0'
-        },
-        connectTimeout: this.config.timeout
+        connectTimeout: 5000 // Short timeout for health check
       });
-
-      const isConnected = response.ok;
-      console.log('API connectivity test result:', isConnected);
       
+      const isConnected = response.ok;
+      console.log('[TokenExchangeService] Connection test result:', isConnected);
       return isConnected;
     } catch (error) {
-      console.error('API connectivity test failed:', error);
+      console.error('[TokenExchangeService] Connection test failed:', error);
       return false;
     }
   }
-
-  /**
-   * Update API configuration
-   * @param newConfig - New API configuration
-   */
-  updateConfig(newConfig: Partial<ApiConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-    console.log('API configuration updated:', this.config);
-  }
-
-  /**
-   * Get current API configuration
-   * @returns Current API configuration
-   */
-  getConfig(): ApiConfig {
-    return { ...this.config };
-  }
 }
-
-/**
- * Get API configuration based on current environment
- */
-export const getEnvironmentApiConfig = (): ApiConfig => {
-  const envConfig = getEnvironmentConfig();
-  
-  return {
-    baseUrl: envConfig.api.baseUrl,
-    timeout: envConfig.api.timeout
-  };
-};
-
-/**
- * Default API configuration for production
- * @deprecated Use getEnvironmentApiConfig() instead
- */
-export const getDefaultApiConfig = (): ApiConfig => ({
-  baseUrl: 'https://clipify.space',
-  timeout: 30000 // 30 seconds
-});
-
-/**
- * Development API configuration
- * @deprecated Use getEnvironmentApiConfig() instead
- */
-export const getDevApiConfig = (): ApiConfig => ({
-  baseUrl: 'http://localhost:8080',
-  timeout: 10000 // 10 seconds
-});
-
-// Export singleton instance with environment-based config
-export const tokenExchangeService = new TokenExchangeService(getEnvironmentApiConfig());
