@@ -304,7 +304,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Make a request to the OAuth login endpoint with client_type=desktop
       // This will check for existing session cookies and redirect if authenticated
       const { oauthService } = await import('../services/oauthService');
-      const authUrl = await oauthService.generateAuthUrl(false);
       
       // Launch the OAuth URL - if user is already logged in on website,
       // the server will detect the session and redirect back immediately

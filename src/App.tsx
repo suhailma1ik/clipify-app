@@ -143,6 +143,8 @@ function App() {
     setOriginalText(text);
     if (text) {
       setCleanedText(cleanupText(text));
+    } else {
+      setCleanedText("");
     }
   };
 
@@ -153,12 +155,26 @@ function App() {
       if (text) {
         setOriginalText(text);
         const cleaned = cleanupText(text);
-        setCleanedText(cleaned);
+        
+        // If cleaned text is empty, don't process it
+        if (!cleaned) {
+          setShortcutStatus(`⚠️ No text to clean`);
+          setTimeout(() => {
+            setShortcutStatus("Global shortcut Cmd+Shift+C ready to capture text");
+          }, 3000);
+          setIsProcessing(false);
+          return;
+        }
         
         // Automatically copy cleaned text back to clipboard
         await writeText(cleaned);
         
         setShortcutStatus(`✅ Text cleaned and copied! ${new Date().toLocaleTimeString()}`);
+        setTimeout(() => {
+          setShortcutStatus("Global shortcut Cmd+Shift+C ready to capture text");
+        }, 3000);
+      } else {
+        setShortcutStatus(`⚠️ No text found in clipboard`);
         setTimeout(() => {
           setShortcutStatus("Global shortcut Cmd+Shift+C ready to capture text");
         }, 3000);
@@ -212,8 +228,27 @@ function App() {
     
     // Listen for clipboard updates from global shortcut
     const unlistenClipboard = listen<string>('clipboard-updated', async (event) => {
+      // If the text is empty, don't process it
+      if (!event.payload) {
+        setShortcutStatus(`⚠️ No text selected for cleaning`);
+        setTimeout(() => {
+          setShortcutStatus("Global shortcut Cmd+Shift+C ready to capture text");
+        }, 3000);
+        return;
+      }
+      
       setOriginalText(event.payload);
       const cleaned = cleanupText(event.payload);
+      
+      // If cleaned text is empty, don't process it
+      if (!cleaned) {
+        setShortcutStatus(`⚠️ No text to clean`);
+        setTimeout(() => {
+          setShortcutStatus("Global shortcut Cmd+Shift+C ready to capture text");
+        }, 3000);
+        return;
+      }
+      
       setCleanedText(cleaned);
       
       // Auto-copy cleaned text back to clipboard

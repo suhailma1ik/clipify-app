@@ -1,8 +1,9 @@
 // Text cleanup utility function
 export function cleanupText(text: string): string {
-  if (!text) return "";
+  // Handle null, undefined, or empty text
+  if (!text || text.trim() === "") return "";
   
-  return text
+  const cleaned = text
     // Remove excessive whitespace and normalize line breaks
     .replace(/\r\n/g, '\n')  // Convert Windows line endings
     .replace(/\r/g, '\n')    // Convert Mac line endings
@@ -11,6 +12,9 @@ export function cleanupText(text: string): string {
     .replace(/^\s+|\s+$/gm, '') // Trim each line
     .replace(/\n{3,}/g, '\n\n') // Limit to max 2 consecutive line breaks
     .trim(); // Trim overall
+  
+  // Return empty string if the result is only whitespace
+  return cleaned || "";
 }
 
 // Format timestamp for display
