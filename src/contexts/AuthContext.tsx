@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   /**
    * Check for existing valid token on app launch
    */
-  const checkExistingAuth = async () => {
+  const checkExistingAuth = async (): Promise<boolean> => {
     try {
       console.log('Checking for existing authentication...');
       updateAuthState({ isLoading: true, error: null });
@@ -135,7 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!tokenData) {
         console.log('No stored token found');
         clearAuthentication();
-        return;
+        return false;
       }
 
       // Check if token is expired
@@ -143,8 +143,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('Stored token is expired, attempting refresh...');
         
         if (tokenData.refreshToken) {
+          console.log('Attempting to refresh expired token...');
           const refreshed = await refreshToken();
-          if (!refreshed) {
+          if (refreshed) {
+            console.log('Token refresh successful');
+            return true;
+          } else {
             console.log('Token refresh failed, clearing authentication');
             await tokenStorage.removeToken();
             clearAuthentication();
@@ -154,49 +158,116 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           await tokenStorage.removeToken();
           clearAuthentication();
         }
-        return;
+        return false;
       }
 
       // Validate token with backend
+      console.log('Validating existing token with backend...');
       const isValid = await tokenExchangeService.validateToken(tokenData.token);
       
       if (isValid) {
-        console.log('Existing token is valid, setting authenticated state');
-        setAuthenticated(tokenData);
+        console.log('Existing token is valid, fetching user profile...');
+        try {
+          const userData = await tokenExchangeService.getUserProfile(tokenData.token);
+          if (userData) {
+            console.log('User profile fetched successfully:', userData.email);
+            setAuthenticated({ ...tokenData, user: userData });
+            return true;
+          } else {
+            console.log('Failed to fetch user profile despite valid token');
+            // Token is valid but profile fetch failed, still consider authenticated
+            setAuthenticated(tokenData);
+            return true;
+          }
+        } catch (profileError) {
+          console.error('Error fetching user profile:', profileError);
+          // Token is valid but profile fetch failed, still consider authenticated
+          setAuthenticated(tokenData);
+          return true;
+        }
       } else {
-        console.log('Token validation failed, clearing authentication');
+        console.log('Token validation failed, attempting refresh...');
+        if (tokenData.refreshToken) {
+          console.log('Attempting to refresh invalid token...');
+          const refreshed = await refreshToken();
+          if (refreshed) {
+            console.log('Token refresh successful after validation failure');
+            return true;
+          } else {
+            console.log('Token refresh failed after validation failure');
+          }
+        } else {
+          console.log('No refresh token available for invalid token');
+        }
+        
+        console.log('Unable to recover from invalid token, clearing authentication');
         await tokenStorage.removeToken();
         clearAuthentication();
+        return false;
       }
     } catch (error) {
       console.error('Error checking existing auth:', error);
       handleError(error, 'checkExistingAuth');
       await tokenStorage.removeToken();
       clearAuthentication();
+      return false;
     }
   };
 
   /**
    * Handle OAuth callback with authorization code
    */
-  const handleOAuthCallback = async (authCode: string) => {
+  const handleOAuthCallback = async (authCode: string, state: string = ''): Promise<boolean> => {
     try {
-      console.log('Processing OAuth callback...');
+      console.log('Handling OAuth callback with auth code:', authCode);
       updateAuthState({ isLoading: true, error: null });
 
       // Exchange authorization code for JWT token
-      const tokenData = await tokenExchangeService.exchangeCodeForToken(authCode, '');
+      const tokenData = await tokenExchangeService.exchangeCodeForToken(authCode, state);
       
-      // Store token securely
-      await tokenStorage.storeToken(tokenData);
-      
-      // Update authentication state
-      setAuthenticated(tokenData);
-      
-      console.log('Authentication successful!');
+      if (tokenData && tokenData.token) {
+        console.log('Token exchange successful, storing token and setting authenticated state');
+        
+        // Store the token immediately
+        await tokenStorage.storeToken(tokenData);
+        console.log('Token stored successfully');
+        
+        // Fetch user profile to ensure we have complete user data
+        try {
+          const userData = await tokenExchangeService.getUserProfile(tokenData.token);
+          if (userData) {
+            console.log('User profile fetched after OAuth:', userData.email);
+            // Update token data with fresh user data
+            const updatedTokenData = { ...tokenData, user: userData };
+            await tokenStorage.storeToken(updatedTokenData);
+            setAuthenticated(updatedTokenData);
+          } else {
+            setAuthenticated(tokenData);
+          }
+        } catch (profileError) {
+          console.warn('Failed to fetch user profile after OAuth, but continuing with authentication:', profileError);
+          setAuthenticated(tokenData);
+        }
+        
+        console.log('Authentication state set successfully');
+        return true;
+      } else {
+        console.error('Token exchange failed - no token received');
+         const authError = AuthErrorHandler.createError(
+           AuthErrorType.OAUTH_ERROR,
+           'No token received from OAuth callback',
+           'Authentication failed. No token received.',
+           undefined,
+           { source: 'oauth_callback' },
+           true
+         );
+         setError(authError);
+        return false;
+      }
     } catch (error) {
       console.error('OAuth callback error:', error);
       handleError(error, 'handleOAuthCallback');
+      return false;
     }
   };
 
@@ -217,7 +288,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
-   * Start OAuth login flow
+   * Check if user has an existing session on the website
+   */
+  const checkWebsiteSession = async (): Promise<boolean> => {
+    try {
+      console.log('Checking for existing website session...');
+      
+      // Test connectivity first
+      const isConnected = await tokenExchangeService.testConnection();
+      if (!isConnected) {
+        console.log('Cannot connect to server, proceeding with OAuth flow');
+        return false;
+      }
+
+      // Make a request to the OAuth login endpoint with client_type=desktop
+      // This will check for existing session cookies and redirect if authenticated
+      const { oauthService } = await import('../services/oauthService');
+      const authUrl = await oauthService.generateAuthUrl(false);
+      
+      // Launch the OAuth URL - if user is already logged in on website,
+      // the server will detect the session and redirect back immediately
+      await oauthService.launchOAuthFlow(false);
+      
+      return true; // Session check initiated
+    } catch (error) {
+      console.error('Website session check failed:', error);
+      return false;
+    }
+  };
+
+  /**
+   * Start OAuth login flow with session checking
    */
   const login = async () => {
     try {
@@ -234,10 +335,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await deepLinkService.startListening(handler);
       }
       
-      // Launch OAuth flow in browser
-      await import('../services/oauthService').then(({ oauthService }) => {
-        return oauthService.launchOAuthFlow(false);
-      });
+      // Check for existing website session first
+      const sessionCheckInitiated = await checkWebsiteSession();
+      
+      if (!sessionCheckInitiated) {
+        // Fallback to direct OAuth flow if session check failed
+        console.log('Session check failed, launching direct OAuth flow');
+        await import('../services/oauthService').then(({ oauthService }) => {
+          return oauthService.launchOAuthFlow(false);
+        });
+      }
     } catch (error) {
       console.error('Login error:', error);
       handleError(error, 'login');

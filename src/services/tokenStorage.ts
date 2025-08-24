@@ -1,7 +1,7 @@
 import { Store } from '@tauri-apps/plugin-store';
 
 /**
- * Interface for JWT token structure
+ * JWT token data structure
  */
 export interface JWTTokenData {
   token: string;
@@ -17,15 +17,25 @@ export interface JWTTokenData {
 }
 
 /**
+ * Check if running in Tauri environment
+ */
+const isTauriEnvironment = (): boolean => {
+  return typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined;
+};
+
+/**
  * Secure token storage service using Tauri's encrypted store
  * Provides cross-platform secure storage for authentication tokens
+ * Falls back to localStorage in web environment for development
  */
 export class TokenStorageService {
   private store: Store | null = null;
   private readonly STORE_FILE = 'auth.dat';
   private readonly TOKEN_KEY = 'auth_token';
+  private readonly isTauri: boolean;
 
   constructor() {
+    this.isTauri = isTauriEnvironment();
     this.initStore();
   }
 
@@ -34,10 +44,21 @@ export class TokenStorageService {
    */
   private async initStore(): Promise<void> {
     try {
-      this.store = await Store.load(this.STORE_FILE);
+      if (this.isTauri) {
+        this.store = await Store.load(this.STORE_FILE);
+        console.log('Tauri store initialized successfully');
+      } else {
+        console.log('Running in web environment, using localStorage fallback');
+        // In web environment, we don't need to initialize anything
+        this.store = null;
+      }
     } catch (error) {
       console.error('Failed to initialize token storage:', error);
-      throw new Error('Token storage initialization failed');
+      if (this.isTauri) {
+        throw new Error('Token storage initialization failed');
+      }
+      // In web environment, continue without throwing
+      console.warn('Continuing with localStorage fallback');
     }
   }
 
@@ -47,12 +68,17 @@ export class TokenStorageService {
    */
   async storeToken(tokenData: JWTTokenData): Promise<void> {
     try {
-      if (!this.store) {
-        await this.initStore();
+      if (this.isTauri) {
+        if (!this.store) {
+          await this.initStore();
+        }
+        
+        await this.store!.set(this.TOKEN_KEY, tokenData);
+        await this.store!.save();
+      } else {
+        // Web environment fallback
+        localStorage.setItem(this.TOKEN_KEY, JSON.stringify(tokenData));
       }
-      
-      await this.store!.set(this.TOKEN_KEY, tokenData);
-      await this.store!.save();
       
       console.log('Token stored securely');
     } catch (error) {
@@ -67,11 +93,20 @@ export class TokenStorageService {
    */
   async retrieveToken(): Promise<JWTTokenData | null> {
     try {
-      if (!this.store) {
-        await this.initStore();
+      let tokenData: JWTTokenData | null = null;
+      
+      if (this.isTauri) {
+         if (!this.store) {
+           await this.initStore();
+         }
+         tokenData = await this.store!.get<JWTTokenData>(this.TOKEN_KEY) || null;
+      } else {
+        // Web environment fallback
+        const storedData = localStorage.getItem(this.TOKEN_KEY);
+        if (storedData) {
+          tokenData = JSON.parse(storedData);
+        }
       }
-
-      const tokenData = await this.store!.get<JWTTokenData>(this.TOKEN_KEY);
       
       if (!tokenData) {
         return null;
@@ -96,12 +131,17 @@ export class TokenStorageService {
    */
   async removeToken(): Promise<void> {
     try {
-      if (!this.store) {
-        await this.initStore();
-      }
+      if (this.isTauri) {
+        if (!this.store) {
+          await this.initStore();
+        }
 
-      await this.store!.delete(this.TOKEN_KEY);
-      await this.store!.save();
+        await this.store!.delete(this.TOKEN_KEY);
+        await this.store!.save();
+      } else {
+        // Web environment fallback
+        localStorage.removeItem(this.TOKEN_KEY);
+      }
       
       console.log('Token removed from storage');
     } catch (error) {
@@ -177,12 +217,17 @@ export class TokenStorageService {
    */
   async clearAll(): Promise<void> {
     try {
-      if (!this.store) {
-        await this.initStore();
-      }
+      if (this.isTauri) {
+        if (!this.store) {
+          await this.initStore();
+        }
 
-      await this.store!.clear();
-      await this.store!.save();
+        await this.store!.clear();
+        await this.store!.save();
+      } else {
+        // Web environment fallback - only clear our token
+        localStorage.removeItem(this.TOKEN_KEY);
+      }
       
       console.log('All authentication data cleared');
     } catch (error) {

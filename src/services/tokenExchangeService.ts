@@ -225,10 +225,17 @@ export class TokenExchangeService {
       });
 
       if (response.ok) {
-        console.log('Token validation successful');
-        return true;
+        const validationResult = await response.json();
+        console.log('Token validation response:', validationResult);
+        
+        // Check both success and valid flags
+        const isValid = validationResult.success === true && validationResult.valid === true;
+        console.log('Token validation result:', isValid);
+        
+        return isValid;
       } else {
-        console.log('Token validation failed:', response.status);
+        const errorText = await response.text();
+        console.log('Token validation failed:', response.status, errorText);
         return false;
       }
     } catch (error) {

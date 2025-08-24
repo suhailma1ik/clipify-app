@@ -10,12 +10,25 @@ export interface DeepLinkHandler {
 }
 
 /**
+ * Check if running in Tauri environment
+ */
+const isTauriEnvironment = (): boolean => {
+  return typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined;
+};
+
+/**
  * Deep link service for handling OAuth callbacks via custom URI scheme
  * Listens for clipify://auth/callback URLs and processes OAuth responses
+ * In web environment, provides simulation capabilities for development
  */
 export class DeepLinkService {
   private isListening: boolean = false;
   private handler: DeepLinkHandler | null = null;
+  private readonly isTauri: boolean;
+
+  constructor() {
+    this.isTauri = isTauriEnvironment();
+  }
 
   /**
    * Start listening for deep link events
@@ -31,13 +44,18 @@ export class DeepLinkService {
     this.isListening = true;
 
     try {
-      // Listen for deep link events from Tauri
-      const unlisten = await listen<string>('deep-link', (event) => {
-        console.log('Deep link received:', event.payload);
-        this.handleDeepLink(event.payload);
-      });
-
-      console.log('Deep link service started listening for OAuth callbacks');
+      let unlisten: (() => void) | null = null;
+      
+      if (this.isTauri) {
+        // Listen for deep link events from Tauri
+        unlisten = await listen<string>('deep-link', (event) => {
+          console.log('Deep link received:', event.payload);
+          this.handleDeepLink(event.payload);
+        });
+        console.log('Deep link service started listening for OAuth callbacks');
+      } else {
+        console.log('Deep link service initialized in web environment (simulation mode)');
+      }
       
       // Store the unlisten function for cleanup
       (window as any).__deepLinkUnlisten = unlisten;
