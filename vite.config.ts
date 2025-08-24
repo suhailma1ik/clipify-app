@@ -1,8 +1,21 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+
+// Load environment variables based on NODE_ENV
+const getEnvConfig = () => {
+  const env = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '');
+  return {
+    port: parseInt(env.VITE_DEV_TAURI_PORT || env.VITE_PROD_TAURI_PORT || '1420'),
+    hmrPort: parseInt(env.VITE_DEV_TAURI_HMR_PORT || env.VITE_PROD_TAURI_HMR_PORT || '1421'),
+    baseUrl: env.VITE_DEV_BASE_URL || env.VITE_PROD_BASE_URL || 'http://localhost:1420',
+    logLevel: env.VITE_DEV_LOG_LEVEL || env.VITE_PROD_LOG_LEVEL || 'info'
+  };
+};
+
+const envConfig = getEnvConfig();
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -14,14 +27,14 @@ export default defineConfig(async () => ({
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    port: envConfig.port,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: envConfig.hmrPort,
         }
       : undefined,
     watch: {
@@ -29,4 +42,10 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  
+  // Environment-specific logging
+  logLevel: envConfig.logLevel as any,
+  
+  // Base URL configuration
+  base: envConfig.baseUrl,
 }));

@@ -201,6 +201,54 @@ textarea, input {
   position: relative;
 }
 
+/* Two-Panel Layout Transitions */
+.panel-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.content-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.history-item-hover {
+  transition: all 0.3s ease;
+}
+
+.history-item-hover:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(233, 30, 99, 0.15);
+}
+
+/* Responsive Two-Panel Layout */
+@media (max-width: 768px) {
+  .two-panel-layout {
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  
+  .left-panel {
+    width: 100% !important;
+    height: 300px !important;
+    border-right: none !important;
+    border-bottom: 2px solid rgba(233, 30, 99, 0.2) !important;
+  }
+  
+  .right-panel {
+    width: 100% !important;
+    min-height: 400px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .left-panel {
+    height: 250px !important;
+  }
+  
+  .right-panel {
+    min-height: 300px !important;
+  }
+}
+
 .loading::after {
   content: '';
   position: absolute;

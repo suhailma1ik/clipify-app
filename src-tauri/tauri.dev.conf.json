@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.suhailmalik.clipify",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "NODE_ENV=development npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "NODE_ENV=development npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -19,7 +19,7 @@
     },
     "windows": [
       {
-        "title": "Clipify",
+        "title": "Clipify (Development)",
         "width": 800,
         "height": 600,
         "center": true,
