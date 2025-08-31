@@ -1,578 +1,557 @@
-use tauri::{AppHandle, Emitter, Listener, Manager};
-use tauri_plugin_clipboard_manager::ClipboardExt;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use std::path::PathBuf;
-use std::fs;
-use std::io;
-use tokio::sync::RwLock;
+use tauri::{Emitter, Manager};
 use std::sync::Arc;
-use std::env;
+use tokio::sync::RwLock;
+use serde::{Deserialize, Serialize};
 
-// Environment configuration
-#[derive(Debug, Clone)]
-pub struct EnvironmentConfig {
-    pub environment: String,
-    pub api_base_url: String,
-    pub oauth_base_url: String,
-    pub dev_url: String,
-}
+// Module declarations
+mod config;
+mod clipboard;
+mod window;
+mod clipboard_commands;
+mod system;
 
-impl EnvironmentConfig {
-    pub fn from_env() -> Self {
-        let environment = env::var("NODE_ENV").unwrap_or_else(|_| "development".to_string());
-        
-        let (api_base_url, oauth_base_url, dev_url) = if environment == "production" {
-            (
-                env::var("VITE_PROD_API_BASE_URL").unwrap_or_else(|_| "https://clipify.space".to_string()),
-                env::var("VITE_PROD_OAUTH_BASE_URL").unwrap_or_else(|_| "https://clipify.space/api/v1/auth/google/login".to_string()),
-                env::var("VITE_PROD_BASE_URL").unwrap_or_else(|_| "https://clipify.space/".to_string()),
-            )
-        } else {
-            (
-                env::var("VITE_DEV_API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string()),
-                env::var("VITE_DEV_OAUTH_BASE_URL").unwrap_or_else(|_| "http://localhost:8080/api/v1/auth/google/login".to_string()),
-                env::var("VITE_DEV_BASE_URL").unwrap_or_else(|_| "http://localhost:1420".to_string()),
-            )
-        };
-        
-        EnvironmentConfig {
-            environment,
-            api_base_url,
-            oauth_base_url,
-            dev_url,
-        }
-    }
-}
+// Re-export types for external use
+pub use config::{EnvironmentConfig, RephraseRequest, RephraseResponse};
+pub use clipboard::{ClipboardEntry, ClipboardHistory, ClipboardHistoryState};
+pub use window::WindowState;
 
-// Application state for tracking windows
-type WindowState = Mutex<HashMap<String, bool>>;
-
-// Clipboard history data structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClipboardEntry {
-    pub id: String,
-    pub content: String,
-    pub original_content: String,
-    pub is_cleaned: bool,
-    pub timestamp: DateTime<Utc>,
-    pub char_count: usize,
-    pub line_count: usize,
-    pub has_formatting: bool,
-    pub content_type: String, // "text", "url", "email", etc.
-    pub preview: String, // First 100 chars for quick display
-}
-
-impl ClipboardEntry {
-    pub fn new(content: String, is_cleaned: bool, original_content: Option<String>) -> Self {
-        let id = Uuid::new_v4().to_string();
-        let timestamp = Utc::now();
-        let char_count = content.chars().count();
-        let line_count = content.lines().count();
-        let has_formatting = content.contains('\n') || content.contains('\t') || content.chars().any(|c| c.is_whitespace() && c != ' ');
-        
-        // Detect content type
-        let content_type = if content.starts_with("http://") || content.starts_with("https://") {
-            "url".to_string()
-        } else if content.contains('@') && content.contains('.') && !content.contains('\n') {
-            "email".to_string()
-        } else if content.chars().all(|c| c.is_numeric() || c.is_whitespace() || "-+().".contains(c)) {
-            "phone".to_string()
-        } else {
-            "text".to_string()
-        };
-        
-        // Create preview (first 100 chars)
-        let preview = if content.len() > 100 {
-            format!("{}...", &content[..97])
-        } else {
-            content.clone()
-        };
-        
-        ClipboardEntry {
-            id,
-            content: content.clone(),
-            original_content: original_content.unwrap_or_else(|| content.clone()),
-            is_cleaned,
-            timestamp,
-            char_count,
-            line_count,
-            has_formatting,
-            content_type,
-            preview,
-        }
-    }
-    
-    pub fn matches_search(&self, query: &str) -> bool {
-        let query_lower = query.to_lowercase();
-        self.content.to_lowercase().contains(&query_lower) ||
-        self.content_type.to_lowercase().contains(&query_lower)
-    }
+// Deep link protocol verification types
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProtocolRegistrationStatus {
+    pub scheme: String,
+    pub is_registered: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ClipboardHistory {
-    pub entries: Vec<ClipboardEntry>,
-    pub max_entries: usize,
+pub struct DeepLinkDiagnostics {
+    pub protocols: Vec<ProtocolRegistrationStatus>,
+    pub tauri_version: String,
+    pub environment: String,
+    pub last_error: Option<String>,
+    pub event_listener_active: bool,
 }
 
-impl ClipboardHistory {
-    pub fn new(max_entries: usize) -> Self {
-        ClipboardHistory {
-            entries: Vec::new(),
-            max_entries,
+// Deep link event management types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeepLinkEvent {
+    pub id: String,
+    pub url: String,
+    pub timestamp: u64,
+    pub source: String, // "startup" | "runtime" | "manual"
+    pub processed: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct DeepLinkEventStore {
+    events: Arc<RwLock<Vec<DeepLinkEvent>>>,
+    max_events: usize,
+}
+
+impl DeepLinkEventStore {
+    pub fn new(max_events: usize) -> Self {
+        Self {
+            events: Arc::new(RwLock::new(Vec::new())),
+            max_events,
         }
     }
     
-    pub fn add_entry(&mut self, entry: ClipboardEntry) {
-        // Remove duplicate if content already exists
-        self.entries.retain(|e| e.content != entry.content);
+    pub async fn add_event(&self, mut event: DeepLinkEvent) {
+        let mut events = self.events.write().await;
         
-        // Add new entry at the beginning (most recent first)
-        self.entries.insert(0, entry);
+        // Generate ID if not provided
+        if event.id.is_empty() {
+            event.id = format!("dl_{}", chrono::Utc::now().timestamp_millis());
+        }
         
-        // Maintain max entries limit
-        if self.entries.len() > self.max_entries {
-            self.entries.truncate(self.max_entries);
+        // Add timestamp if not provided
+        if event.timestamp == 0 {
+            event.timestamp = chrono::Utc::now().timestamp_millis() as u64;
         }
-    }
-    
-    pub fn remove_entry(&mut self, id: &str) -> bool {
-        let original_len = self.entries.len();
-        self.entries.retain(|e| e.id != id);
-        self.entries.len() != original_len
-    }
-    
-    pub fn clear(&mut self) {
-        self.entries.clear();
-    }
-    
-    pub fn get_entries(&self) -> &Vec<ClipboardEntry> {
-        &self.entries
-    }
-    
-    pub fn search(&self, query: &str) -> Vec<&ClipboardEntry> {
-        if query.is_empty() {
-            self.entries.iter().collect()
-        } else {
-            self.entries.iter().filter(|entry| entry.matches_search(query)).collect()
+        
+        events.push(event);
+        
+        // Maintain max events limit
+        if events.len() > self.max_events {
+            events.remove(0);
         }
+        
+        println!("[DeepLinkEventStore] Added event, total events: {}", events.len());
     }
     
-    pub fn get_entry_by_id(&self, id: &str) -> Option<&ClipboardEntry> {
-        self.entries.iter().find(|e| e.id == id)
-    }
-}
-
-// Global clipboard history manager
-type ClipboardHistoryState = Arc<RwLock<ClipboardHistory>>;
-
-// Storage functions
-fn get_history_file_path() -> io::Result<PathBuf> {
-    let data_dir = dirs::data_dir()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not find data directory"))?;
-    
-    let clipify_dir = data_dir.join("Clipify");
-    
-    // Create directory if it doesn't exist
-    if !clipify_dir.exists() {
-        fs::create_dir_all(&clipify_dir)?;
+    pub async fn get_unprocessed_events(&self) -> Vec<DeepLinkEvent> {
+        let events = self.events.read().await;
+        events.iter()
+            .filter(|event| !event.processed)
+            .cloned()
+            .collect()
     }
     
-    Ok(clipify_dir.join("clipboard_history.json"))
-}
-
-fn save_history_to_file(history: &ClipboardHistory) -> io::Result<()> {
-    let file_path = get_history_file_path()?;
-    let json_data = serde_json::to_string_pretty(history)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(file_path, json_data)
-}
-
-fn load_history_from_file() -> io::Result<ClipboardHistory> {
-    let file_path = get_history_file_path()?;
-    
-    if !file_path.exists() {
-        return Ok(ClipboardHistory::new(10)); // Default max 10 entries
-    }
-    
-    let json_data = fs::read_to_string(file_path)?;
-    let mut history: ClipboardHistory = serde_json::from_str(&json_data)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    
-    // Ensure max_entries is set to 10 if not present in old files
-    if history.max_entries == 0 {
-        history.max_entries = 10;
-    }
-    
-    Ok(history)
-}
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn show_main_window(app: AppHandle) -> Result<(), String> {
-    match app.get_webview_window("main") {
-        Some(window) => {
-            window.show().map_err(|e| e.to_string())?;
-            window.set_focus().map_err(|e| e.to_string())?;
-            window.unminimize().map_err(|e| e.to_string())?;
-            Ok(())
+    pub async fn mark_processed(&self, event_id: &str) -> bool {
+        let mut events = self.events.write().await;
+        if let Some(event) = events.iter_mut().find(|e| e.id == event_id) {
+            event.processed = true;
+            println!("[DeepLinkEventStore] Marked event {} as processed", event_id);
+            return true;
         }
-        None => Err("Main window not found".to_string())
+        false
     }
-}
-
-#[tauri::command]
-fn hide_main_window(app: AppHandle) -> Result<(), String> {
-    match app.get_webview_window("main") {
-        Some(window) => {
-            window.hide().map_err(|e| e.to_string())?;
-            Ok(())
+    
+    pub async fn mark_error(&self, event_id: &str, error: String) -> bool {
+        let mut events = self.events.write().await;
+        if let Some(event) = events.iter_mut().find(|e| e.id == event_id) {
+            event.error = Some(error);
+            event.processed = true;
+            println!("[DeepLinkEventStore] Marked event {} with error", event_id);
+            return true;
         }
-        None => Err("Main window not found".to_string())
+        false
+    }
+    
+    pub async fn get_all_events(&self) -> Vec<DeepLinkEvent> {
+        let events = self.events.read().await;
+        events.clone()
+    }
+    
+    pub async fn clear_events(&self) {
+        let mut events = self.events.write().await;
+        events.clear();
+        println!("[DeepLinkEventStore] Cleared all events");
     }
 }
 
-#[tauri::command]
-fn toggle_window_visibility(app: AppHandle) -> Result<(), String> {
-    match app.get_webview_window("main") {
-        Some(window) => {
-            if window.is_visible().map_err(|e| e.to_string())? {
-                window.hide().map_err(|e| e.to_string())?;
-            } else {
-                window.show().map_err(|e| e.to_string())?;
-                window.set_focus().map_err(|e| e.to_string())?;
-                window.unminimize().map_err(|e| e.to_string())?;
+pub type DeepLinkEventStoreState = Arc<DeepLinkEventStore>;
+
+// Import functions from modules
+use clipboard::load_history_from_file;
+use clipboard_commands::*;
+use window::*;
+use system::{check_accessibility_permissions, quit_application, get_macos_version, get_accessibility_instructions};
+
+// Deep link plugin is initialized via tauri_plugin_deep_link::init() in the builder
+
+/**
+ * Format deep link URL for display in notifications
+ * Truncates long URLs and highlights the important parts
+ */
+fn format_deep_link_for_notification(url: &str) -> String {
+    if url.len() <= 50 {
+        return url.to_string();
+    }
+    
+    // Try to parse URL to extract meaningful parts
+    if let Ok(parsed_url) = url::Url::parse(url) {
+        let scheme = parsed_url.scheme();
+        let host = parsed_url.host_str().unwrap_or("");
+        let path = parsed_url.path();
+        
+        // Format based on clipify deep links
+        if scheme == "clipify" {
+            if path.contains("auth") {
+                return format!("clipify://auth (Authentication)");
+            } else if !path.is_empty() && path != "/" {
+                return format!("clipify://{}", path.trim_start_matches('/'));
             }
-            Ok(())
         }
-        None => Err("Main window not found".to_string())
+        
+        // Generic URL formatting
+        if host.is_empty() {
+            format!("{}://{}", scheme, path)
+        } else {
+            format!("{}://{}{}", scheme, host, if path.len() > 20 { "..." } else { path })
+        }
+    } else {
+        // Fallback: truncate long URLs
+        format!("{}...", &url[..47])
     }
 }
 
-// Clipboard History Commands
-#[tauri::command]
-async fn get_clipboard_history(history_state: tauri::State<'_, ClipboardHistoryState>) -> Result<Vec<ClipboardEntry>, String> {
-    let history = history_state.read().await;
-    Ok(history.get_entries().clone())
-}
-
-#[tauri::command]
-async fn add_to_clipboard_history(
-    content: String,
-    is_cleaned: bool,
-    original_content: Option<String>,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<(), String> {
-    let entry = ClipboardEntry::new(content, is_cleaned, original_content);
-    
-    {
-        let mut history = history_state.write().await;
-        history.add_entry(entry);
-        
-        // Save to file
-        if let Err(e) = save_history_to_file(&*history) {
-            eprintln!("Failed to save clipboard history: {}", e);
-        }
-    }
-    
-    Ok(())
-}
-
-#[tauri::command]
-async fn remove_from_clipboard_history(
-    id: String,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<bool, String> {
-    let removed = {
-        let mut history = history_state.write().await;
-        let removed = history.remove_entry(&id);
-        
-        // Save to file
-        if let Err(e) = save_history_to_file(&*history) {
-            eprintln!("Failed to save clipboard history: {}", e);
-        }
-        
-        removed
-    };
-    
-    Ok(removed)
-}
-
-#[tauri::command]
-async fn clear_clipboard_history(history_state: tauri::State<'_, ClipboardHistoryState>) -> Result<(), String> {
-    {
-        let mut history = history_state.write().await;
-        history.clear();
-        
-        // Save to file
-        if let Err(e) = save_history_to_file(&*history) {
-            eprintln!("Failed to save clipboard history: {}", e);
-        }
-    }
-    
-    Ok(())
-}
-
-#[tauri::command]
-async fn search_clipboard_history(
-    query: String,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<Vec<ClipboardEntry>, String> {
-    let history = history_state.read().await;
-    let results = history.search(&query)
-        .into_iter()
-        .cloned()
-        .collect();
-    Ok(results)
-}
-
-#[tauri::command]
-async fn get_clipboard_entry_by_id(
-    id: String,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<Option<ClipboardEntry>, String> {
-    let history = history_state.read().await;
-    Ok(history.get_entry_by_id(&id).cloned())
-}
-
-#[tauri::command]
-async fn paste_from_history(
-    id: String,
-    app: AppHandle,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<String, String> {
-    let content = {
-        let history = history_state.read().await;
-        match history.get_entry_by_id(&id) {
-            Some(entry) => entry.content.clone(),
-            None => return Err("Entry not found".to_string())
-        }
-    };
-    
-    // Copy to clipboard
-    if let Err(e) = app.clipboard().write_text(&content) {
-        return Err(format!("Failed to copy to clipboard: {}", e));
-    }
-    
-    Ok(content)
-}
-
-#[tauri::command]
-fn check_accessibility_permissions() -> Result<String, String> {
+/**
+ * Verify if a protocol scheme is registered with the operating system
+ * This is platform-specific and provides diagnostic information
+ */
+fn verify_protocol_registration(scheme: &str) -> ProtocolRegistrationStatus {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
         
-        // Try to check if we have accessibility permissions
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg("tell application \"System Events\" to get name of first process")
+        // On macOS, check if the protocol is registered by querying the Launch Services database
+        let output = Command::new("defaults")
+            .args(&["read", "com.apple.LaunchServices/com.apple.launchservices.secure", "LSHandlers"])
             .output();
             
         match output {
-            Ok(result) => {
-                if result.status.success() {
-                    Ok("Accessibility permissions are granted".to_string())
-                } else {
-                    let error = String::from_utf8_lossy(&result.stderr);
-                    if error.contains("not allowed assistive") || error.contains("accessibility") {
-                        Err("Accessibility permissions required. Please go to System Preferences > Security & Privacy > Privacy > Accessibility and add Clipify to the list of allowed applications.".to_string())
-                    } else {
-                        Err(format!("Permission check failed: {}", error))
-                    }
+            Ok(output) => {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let is_registered = output_str.contains(&format!("LSHandlerURLScheme = \"{}\";", scheme));
+                
+                ProtocolRegistrationStatus {
+                    scheme: scheme.to_string(),
+                    is_registered,
+                    error: None,
                 }
             }
-            Err(e) => Err(format!("Failed to check permissions: {}", e))
+            Err(e) => ProtocolRegistrationStatus {
+                scheme: scheme.to_string(),
+                is_registered: false,
+                error: Some(format!("Failed to check protocol registration: {}", e)),
+            }
         }
     }
     
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok("Permission check not implemented for this platform".to_string())
-    }
-}
-
-#[tauri::command]
-fn quit_application(app: AppHandle) {
-    app.exit(0);
-}
-
-// Function to clean and beautify text according to Clipify specifications
-fn cleanup_text(text: &str) -> String {
-    // Handle null, undefined, or empty text
-    if text.is_empty() || text.trim().is_empty() {
-        return String::new();
-    }
-    
-    text
-        // Convert all line endings to Unix format
-        .replace("\r\n", "\n")  // Convert Windows line endings
-        .replace("\r", "\n")    // Convert Mac line endings
-        // Replace multiple spaces/tabs with single space
-        .chars()
-        .collect::<Vec<char>>()
-        .windows(2)
-        .fold(String::new(), |mut acc, window| {
-            if window.len() == 2 {
-                let current = window[0];
-                let next = window[1];
-                
-                // Add current character if it's not a redundant space/tab
-                if !(current == ' ' && (next == ' ' || next == '\t')) &&
-                   !(current == '\t' && (next == ' ' || next == '\t')) {
-                    acc.push(if current == '\t' { ' ' } else { current });
-                }
-            }
-            acc
-        })
-        // Handle the last character
-        .chars().chain(text.chars().last())
-        .collect::<String>()
-        // Replace multiple line breaks with double
-        .split('\n')
-        .map(|line| line.trim())
-        .collect::<Vec<&str>>()
-        .join("\n")
-        // Limit to max 2 consecutive line breaks
-        .split("\n\n\n")
-        .collect::<Vec<&str>>()
-        .join("\n\n")
-        .trim()
-        .to_string()
-}
-
-#[tauri::command]
-async fn copy_selected_text_to_clipboard(
-    app: AppHandle,
-    history_state: tauri::State<'_, ClipboardHistoryState>
-) -> Result<String, String> {
-    // Get the currently selected text from the system clipboard
-    // This simulates copying selected text by sending Cmd+C to the focused application
-    #[cfg(target_os = "macos")]
+    #[cfg(target_os = "windows")]
     {
         use std::process::Command;
         
-        // Store current clipboard content to compare later
-        let old_clipboard = app.clipboard().read_text().unwrap_or_default();
+        // On Windows, check the registry for protocol handlers
+        let output = Command::new("reg")
+            .args(&["query", &format!("HKEY_CLASSES_ROOT\\{}", scheme), "/ve"])
+            .output();
+            
+        match output {
+            Ok(output) => {
+                let is_registered = output.status.success();
+                
+                ProtocolRegistrationStatus {
+                    scheme: scheme.to_string(),
+                    is_registered,
+                    error: None,
+                }
+            }
+            Err(e) => ProtocolRegistrationStatus {
+                scheme: scheme.to_string(),
+                is_registered: false,
+                error: Some(format!("Failed to check protocol registration: {}", e)),
+            }
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
         
-        // Try multiple AppleScript approaches for better compatibility
-        let scripts = vec![
-            "tell application \"System Events\" to keystroke \"c\" using command down",
-            "tell application \"System Events\" to key code 8 using command down", // Alternative key code approach
+        // On Linux, check if xdg-mime can find a handler for the protocol
+        let output = Command::new("xdg-mime")
+            .args(&["query", "default", &format!("x-scheme-handler/{}", scheme)])
+            .output();
+            
+        match output {
+            Ok(output) => {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let is_registered = !output_str.trim().is_empty() && !output_str.contains("No default application");
+                
+                ProtocolRegistrationStatus {
+                    scheme: scheme.to_string(),
+                    is_registered,
+                    error: None,
+                }
+            }
+            Err(e) => ProtocolRegistrationStatus {
+                scheme: scheme.to_string(),
+                is_registered: false,
+                error: Some(format!("Failed to check protocol registration: {}", e)),
+            }
+        }
+    }
+    
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        ProtocolRegistrationStatus {
+            scheme: scheme.to_string(),
+            is_registered: false,
+            error: Some("Protocol verification not supported on this platform".to_string()),
+        }
+    }
+}
+
+/**
+ * Tauri command to verify protocol registration for all configured schemes
+ */
+#[tauri::command]
+async fn verify_deep_link_protocols() -> Result<DeepLinkDiagnostics, String> {
+    let schemes = vec!["clipify".to_string(), "clipify-dev".to_string()];
+    let mut protocols = Vec::new();
+    
+    for scheme in schemes {
+        let status = verify_protocol_registration(&scheme);
+        protocols.push(status);
+    }
+    
+    let diagnostics = DeepLinkDiagnostics {
+        protocols,
+        tauri_version: env!("CARGO_PKG_VERSION").to_string(),
+        environment: if cfg!(debug_assertions) { "development".to_string() } else { "production".to_string() },
+        last_error: None,
+        event_listener_active: true, // This would be set based on actual listener state
+    };
+    
+    Ok(diagnostics)
+}
+
+/**
+ * Tauri command to get protocol registration status for a specific scheme
+ */
+#[tauri::command]
+async fn check_protocol_registration(scheme: String) -> Result<ProtocolRegistrationStatus, String> {
+    Ok(verify_protocol_registration(&scheme))
+}
+
+/**
+ * Tauri command to get all pending deep link events
+ */
+#[tauri::command]
+async fn get_pending_deep_link_events(
+    event_store: tauri::State<'_, DeepLinkEventStoreState>
+) -> Result<Vec<DeepLinkEvent>, String> {
+    Ok(event_store.get_unprocessed_events().await)
+}
+
+/**
+ * Tauri command to get all deep link events (processed and unprocessed)
+ */
+#[tauri::command]
+async fn get_all_deep_link_events(
+    event_store: tauri::State<'_, DeepLinkEventStoreState>
+) -> Result<Vec<DeepLinkEvent>, String> {
+    Ok(event_store.get_all_events().await)
+}
+
+/**
+ * Tauri command to mark a deep link event as processed
+ */
+#[tauri::command]
+async fn mark_deep_link_event_processed(
+    event_id: String,
+    event_store: tauri::State<'_, DeepLinkEventStoreState>
+) -> Result<bool, String> {
+    Ok(event_store.mark_processed(&event_id).await)
+}
+
+/**
+ * Tauri command to mark a deep link event with an error
+ */
+#[tauri::command]
+async fn mark_deep_link_event_error(
+    event_id: String,
+    error: String,
+    event_store: tauri::State<'_, DeepLinkEventStoreState>
+) -> Result<bool, String> {
+    Ok(event_store.mark_error(&event_id, error).await)
+}
+
+/**
+ * Tauri command to clear all deep link events
+ */
+#[tauri::command]
+async fn clear_deep_link_events(
+    event_store: tauri::State<'_, DeepLinkEventStoreState>
+) -> Result<(), String> {
+    event_store.clear_events().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn register_global_shortcut(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
+    
+    println!("🔐 Starting global shortcut registration process...");
+    
+    // First verify accessibility permissions before attempting registration
+    #[cfg(target_os = "macos")]
+    {
+        match system::check_accessibility_permissions() {
+            Ok(msg) => {
+                println!("✅ Accessibility permissions verified: {}", msg);
+            }
+            Err(err) => {
+                println!("❌ Accessibility permissions check failed: {}", err);
+                return Err(format!("Cannot register global shortcut: {}", err));
+            }
+        }
+    }
+    
+    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
+    
+    // Check if shortcut is already registered
+    if app.global_shortcut().is_registered(shortcut) {
+        println!("ℹ️ Global shortcut Cmd+Shift+C is already registered");
+        return Ok(());
+    }
+    
+    // Attempt to register the shortcut
+    match app.global_shortcut().register(shortcut) {
+        Ok(_) => {
+            println!("✅ Global shortcut Cmd+Shift+C registered successfully!");
+            Ok(())
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to register global shortcut: {}", e);
+            println!("❌ {}", error_msg);
+            
+            // Provide more specific error messages based on the error type
+            if error_msg.contains("permission") || error_msg.contains("accessibility") {
+                Err("Global shortcut registration failed due to missing accessibility permissions. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility (macOS 13+) or System Preferences > Security & Privacy > Privacy > Accessibility (macOS 12 and earlier) and restart the app.".to_string())
+            } else if error_msg.contains("already registered") || error_msg.contains("in use") {
+                Err("The shortcut Cmd+Shift+C is already in use by another application. Please close other apps that might be using this shortcut and try again.".to_string())
+            } else {
+                Err(format!("Failed to register global shortcut Cmd+Shift+C: {}. Please ensure you have accessibility permissions enabled and restart the app.", e))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn open_accessibility_settings(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_plugin_shell::ShellExt;
+        
+        // Try multiple methods to open accessibility settings
+        // Support both new System Settings (macOS 13+) and legacy System Preferences
+        let commands = vec![
+            // macOS 13+ (Ventura) and 14+ (Sonoma) - System Settings
+            vec!["x-apple.systemsettings:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility"],
+            vec!["x-apple.systemsettings:com.apple.preference.security?Privacy_Accessibility"],
+            
+            // Legacy System Preferences (macOS 12 and earlier)
+            vec!["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+            vec!["/System/Library/PreferencePanes/Security.prefPane"],
+            
+            // Fallback methods with bundle identifiers
+            vec!["-b", "com.apple.systempreferences", "/System/Library/PreferencePanes/Security.prefPane"],
+            vec!["-b", "com.apple.SystemSettings"],
+            
+            // Last resort - open System Settings/Preferences root
+            vec!["/System/Applications/System Settings.app"],
+            vec!["/Applications/System Preferences.app"],
         ];
         
-        let mut copy_success = false;
-        let mut last_error = String::new();
+        let shell = app.shell();
         
-        for script in scripts {
-            let output = Command::new("osascript")
-                .arg("-e")
-                .arg(script)
-                .output();
-                
-            match output {
-                Ok(result) => {
-                    if result.status.success() {
-                        copy_success = true;
-                        break;
-                    } else {
-                        let error = String::from_utf8_lossy(&result.stderr);
-                        last_error = format!("AppleScript error: {}", error);
-                        println!("AppleScript failed: {}", error);
-                    }
+        for cmd_args in commands {
+            let result = if cmd_args.len() == 1 {
+                // Single argument - treat as URL or path to open
+                shell.command("open")
+                    .args(&cmd_args)
+                    .spawn()
+            } else {
+                // Multiple arguments - pass all to open command
+                shell.command("open")
+                    .args(&cmd_args)
+                    .spawn()
+            };
+            
+            match result {
+                Ok(_) => {
+                    println!("Successfully opened accessibility settings with command: open {:?}", cmd_args);
+                    return Ok(());
                 }
                 Err(e) => {
-                    last_error = format!("Failed to execute AppleScript: {}", e);
-                    println!("Command execution error: {}", e);
+                    println!("Failed to open accessibility settings with command open {:?}: {}", cmd_args, e);
                 }
             }
         }
         
-        if !copy_success {
-            return Err(format!("All copy attempts failed. Last error: {}. This might be due to missing accessibility permissions. Please grant accessibility permissions to Clipify in System Preferences > Security & Privacy > Privacy > Accessibility.", last_error));
-        }
-        
-        // Wait for clipboard to be updated with multiple checks
-        let mut attempts = 0;
-        let max_attempts = 10; // Try for up to 1 second (10 * 100ms)
-        let mut new_text = String::new();
-        
-        while attempts < max_attempts {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            
-            match app.clipboard().read_text() {
-                Ok(clipboard_content) => {
-                    if clipboard_content != old_clipboard && !clipboard_content.is_empty() {
-                        new_text = clipboard_content;
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("Clipboard read error on attempt {}: {}", attempts + 1, e);
-                }
-            }
-            
-            attempts += 1;
-        }
-        
-        if new_text.is_empty() || new_text == old_clipboard {
-            return Err("No new text was copied to clipboard. Please ensure text is selected before using the shortcut.".to_string());
-        }
-        
-        // Clean the text according to Clipify specifications
-        let cleaned_text = cleanup_text(&new_text);
-        
-        // Check if cleaned text is empty and return early if so
-        if cleaned_text.is_empty() {
-            // Emit an event to notify the frontend about empty text
-            if let Err(e) = app.emit("clipboard-updated", "") {
-                println!("Failed to emit clipboard update event for empty text: {}", e);
-            }
-            return Ok("".to_string());
-        }
-        
-        // Write cleaned text back to clipboard
-        if let Err(e) = app.clipboard().write_text(&cleaned_text) {
-            return Err(format!("Failed to write cleaned text to clipboard: {}", e));
-        }
-        
-        // Add to clipboard history
-        let original_entry = ClipboardEntry::new(new_text.clone(), false, None);
-        let cleaned_entry = ClipboardEntry::new(cleaned_text.clone(), true, Some(new_text.clone()));
-        
-        {
-            let mut history = history_state.write().await;
-            // Add both original and cleaned entries to history
-            history.add_entry(cleaned_entry);
-            if new_text != cleaned_text {
-                history.add_entry(original_entry);
-            }
-            
-            // Save to file
-            if let Err(e) = save_history_to_file(&*history) {
-                eprintln!("Failed to save clipboard history: {}", e);
-            }
-        }
-        
-        // Emit an event to notify the frontend
-        if let Err(e) = app.emit("clipboard-updated", &cleaned_text) {
-            println!("Failed to emit clipboard update event: {}", e);
-        }
-        
-        Ok(cleaned_text)
+        Err("Failed to open accessibility settings with any method. Please manually open System Settings > Privacy & Security > Accessibility (macOS 13+) or System Preferences > Security & Privacy > Privacy > Accessibility (macOS 12 and earlier)".to_string())
     }
     
     #[cfg(not(target_os = "macos"))]
     {
-        // For other platforms, we'll need to implement platform-specific solutions
-        // For now, just return an error
-        Err("Global shortcut copy is currently only supported on macOS".to_string())
+        Err("Accessibility settings only available on macOS".to_string())
     }
 }
+
+#[tauri::command]
+async fn unregister_global_shortcut(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
+    
+    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
+    
+    app.global_shortcut().unregister(shortcut)
+        .map_err(|e| format!("Failed to unregister global shortcut: {}", e))?;
+    
+    println!("Global shortcut Cmd+Shift+C unregistered successfully!");
+    Ok(())
+}
+
+#[tauri::command]
+async fn check_global_shortcut_registered(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
+    
+    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
+    
+    let is_registered = app.global_shortcut().is_registered(shortcut);
+    
+    Ok(is_registered)
+}
+
+#[tauri::command]
+async fn check_accessibility_permissions_and_shortcut_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
+    use serde_json::json;
+    
+    println!("🔍 Checking comprehensive accessibility and shortcut status...");
+    
+    let mut result = json!({
+        "accessibility_granted": false,
+        "shortcut_registered": false,
+        "can_register_shortcut": false,
+        "error_message": null,
+        "needs_restart": false
+    });
+    
+    // Check accessibility permissions first
+    #[cfg(target_os = "macos")]
+    {
+        match system::check_accessibility_permissions() {
+            Ok(msg) => {
+                println!("✅ Accessibility permissions check passed: {}", msg);
+                result["accessibility_granted"] = json!(true);
+                result["can_register_shortcut"] = json!(true);
+            }
+            Err(err) => {
+                println!("❌ Accessibility permissions check failed: {}", err);
+                result["accessibility_granted"] = json!(false);
+                result["can_register_shortcut"] = json!(false);
+                result["error_message"] = json!(err);
+                
+                // Check if this might be a restart-required situation
+                if err.contains("restart") || err.contains("Unable to verify") {
+                    result["needs_restart"] = json!(true);
+                }
+                
+                return Ok(result);
+            }
+        }
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        result["accessibility_granted"] = json!(true);
+        result["can_register_shortcut"] = json!(true);
+    }
+    
+    // Check if shortcut is already registered
+    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
+    let is_registered = app.global_shortcut().is_registered(shortcut);
+    result["shortcut_registered"] = json!(is_registered);
+    
+    println!("✅ Accessibility and shortcut status check completed");
+    Ok(result)
+}
+
+
+
+
+
+// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+
+
+
+
+
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -586,7 +565,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_http::init())
-        // .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, shortcut, event| {
                 println!("Global shortcut triggered: {shortcut:?} with event {event:?}");
@@ -595,60 +574,151 @@ pub fn run() {
                     let history_state = app_handle.state::<ClipboardHistoryState>();
                     match copy_selected_text_to_clipboard(app_handle.clone(), history_state).await {
                         Ok(text) => {
-                            println!("Successfully copied to clipboard: {}", text);
-                            // Send notification
-                            if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app_handle)
-                                .builder()
-                                .title("Text Copied!")
-                                .body(&format!("Cleaned text: {}", 
-                                    if text.len() > 50 { 
-                                        format!("{}...", &text[..50]) 
-                                    } else { 
-                                        text 
-                                    }
-                                ))
-                                .show() {
-                                eprintln!("Failed to show notification: {}", e);
+                            if !text.is_empty() {
+                                println!("Successfully copied and cleaned text: {} characters", text.len());
+                                
+                                // Emit event to frontend to trigger auto-rephrase
+                                if let Err(e) = app_handle.emit("auto-rephrase-request", &text) {
+                                    eprintln!("Failed to emit auto-rephrase event: {}", e);
+                                }
+                                
+                                // Send success notification with cleaned text preview
+                                let preview = if text.len() > 100 { 
+                                    format!("{}...", &text[..97]) 
+                                } else { 
+                                    text.clone() 
+                                };
+                                
+                                if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app_handle)
+                                    .builder()
+                                    .title("✅ Text Copied & Cleaned!")
+                                    .body(&format!("Cleaned text ({} chars): {}", text.len(), preview))
+                                    .show() {
+                                    eprintln!("Failed to show success notification: {}", e);
+                                }
+                            } else {
+                                println!("Empty text result from clipboard operation");
+                                // Show notification for empty result
+                                if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app_handle)
+                                    .builder()
+                                    .title("ℹ️ No Text to Clean")
+                                    .body("The selected text was empty or contained only whitespace.")
+                                    .show() {
+                                    eprintln!("Failed to show empty text notification: {}", e);
+                                }
                             }
                         },
                         Err(e) => {
-                            eprintln!("Error copying to clipboard: {}", e);
+                            eprintln!("Error in global shortcut handler: {}", e);
+                            // The error notifications are already handled in copy_selected_text_to_clipboard
+                            // Just log the error here for debugging
                         }
                     }
                 });
             })
             .build())
         .setup(|app| {
-            use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
-            // use tauri_plugin_deep_link::DeepLinkExt;
+            // Initialize deep link event store first
+            let deep_link_store = Arc::new(DeepLinkEventStore::new(50)); // Store up to 50 events
+            app.manage(deep_link_store.clone());
             
-            // Register deep link handler for OAuth callbacks
-            // app.deep_link().register("clipify")?;
+            // Set up deep link event handler using the correct Tauri v2 API
+            use tauri_plugin_deep_link::DeepLinkExt;
             
-            // Set up deep link event listener
-            let app_handle = app.handle().clone();
-            app.listen_any("deep-link://new-url", move |event| {
-                let url = event.payload();
-                println!("Deep link received: {}", url);
-                
-                // Emit the deep link event to the frontend
-                if let Err(e) = app_handle.emit("deep-link", url) {
-                    eprintln!("Failed to emit deep link event: {}", e);
+            // Check if app was started with a deep link
+            let start_urls = app.deep_link().get_current()?;
+            if let Some(urls) = start_urls {
+                println!("[Tauri] App started with deep link URLs: {:?}", urls);
+                // Process startup deep links
+                for url in urls {
+                    let url_str = url.to_string();
+                    println!("[Tauri] Processing startup deep link: {}", url_str);
+                    
+                    // Store the deep link event
+                    let event = DeepLinkEvent {
+                        id: String::new(), // Will be generated in add_event
+                        url: url_str.clone(),
+                        timestamp: 0, // Will be set in add_event
+                        source: "startup".to_string(),
+                        processed: false,
+                        error: None,
+                    };
+                    
+                    let store_clone = deep_link_store.clone();
+                    tauri::async_runtime::spawn(async move {
+                        store_clone.add_event(event).await;
+                    });
+                    
+                    // Show permanent notification for startup deep links
+                    if let Err(e) = tauri_plugin_notification::NotificationExt::notification(app)
+                        .builder()
+                        .title("🔗 Deep Link Received (Startup)")
+                        .body(&format!("App launched with deep link: {}", format_deep_link_for_notification(&url_str)))
+                        .show() {
+                        eprintln!("[Tauri] Failed to show startup deep link notification: {}", e);
+                    } else {
+                        println!("[Tauri] Startup deep link notification shown successfully");
+                    }
+                    
+                    if let Err(e) = app.emit("deep-link-received", &url_str) {
+                        eprintln!("[Tauri] Failed to emit startup deep link event: {}", e);
+                    } else {
+                        println!("[Tauri] Successfully emitted startup deep link event: {}", url_str);
+                    }
                 }
+            } else {
+                println!("[Tauri] No startup deep links found");
+            }
+            
+            // Set up deep link event handler for runtime deep links
+            let app_handle = app.handle().clone();
+            let store_for_runtime = deep_link_store.clone();
+            app.deep_link().on_open_url(move |event| {
+                let urls = event.urls();
+                println!("[Tauri] Runtime deep link received: {:?}", urls);
                 
-                // Show and focus the main window when deep link is received
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    if let Err(e) = window.show() {
-                        eprintln!("Failed to show window: {}", e);
+                // Emit each deep link URL to the frontend
+                for url in urls {
+                    let url_str = url.as_str();
+                    println!("[Tauri] Processing runtime deep link: {}", url_str);
+                    
+                    // Store the deep link event
+                    let event = DeepLinkEvent {
+                        id: String::new(), // Will be generated in add_event
+                        url: url_str.to_string(),
+                        timestamp: 0, // Will be set in add_event
+                        source: "runtime".to_string(),
+                        processed: false,
+                        error: None,
+                    };
+                    
+                    let store_clone = store_for_runtime.clone();
+                    tauri::async_runtime::spawn(async move {
+                        store_clone.add_event(event).await;
+                    });
+                    
+                    // Show permanent notification for runtime deep links
+                    if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app_handle)
+                        .builder()
+                        .title("🔗 Deep Link Received")
+                        .body(&format!("Clipify received: {}", format_deep_link_for_notification(url_str)))
+                        .show() {
+                        eprintln!("[Tauri] Failed to show runtime deep link notification: {}", e);
+                    } else {
+                        println!("[Tauri] Runtime deep link notification shown successfully");
                     }
-                    if let Err(e) = window.set_focus() {
-                        eprintln!("Failed to focus window: {}", e);
-                    }
-                    if let Err(e) = window.unminimize() {
-                        eprintln!("Failed to unminimize window: {}", e);
+                    
+                    if let Err(e) = app_handle.emit("deep-link-received", url_str) {
+                        eprintln!("[Tauri] Failed to emit deep link event to frontend: {}", e);
+                    } else {
+                        println!("[Tauri] Successfully forwarded deep link to frontend: {}", url_str);
                     }
                 }
             });
+            
+            println!("[Tauri] Deep link handler setup complete");
+            
+
             
             // Initialize clipboard history
             let history = load_history_from_file().unwrap_or_else(|e| {
@@ -658,18 +728,15 @@ pub fn run() {
             let history_state = Arc::new(RwLock::new(history));
             app.manage(history_state.clone());
             
-            // Register the global shortcut
-            let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
-            app.global_shortcut().register(shortcut)
-                .map_err(|e| format!("Failed to register global shortcut: {}", e))?;
-            
-            println!("Global shortcut Cmd+Shift+C registered successfully!");
+            // Note: Global shortcut registration is now handled via permission flow
+            // The shortcut will be registered when user grants permission through the UI
+            println!("Clipify initialized - hotkey registration requires user permission");
             
             // Create system tray menu
             let show_hide = tauri::menu::MenuItem::with_id(app, "show_hide", "Show/Hide Clipify", true, None::<&str>)?;
             let separator1 = tauri::menu::PredefinedMenuItem::separator(app)?;
             let cleanup_clipboard = tauri::menu::MenuItem::with_id(app, "cleanup_clipboard", "🧹 Cleanup Clipboard", true, None::<&str>)?;
-            let trigger_shortcut = tauri::menu::MenuItem::with_id(app, "trigger_shortcut", "⌨️ Trigger Shortcut (Cmd+Shift+C)", true, None::<&str>)?;
+            let trigger_shortcut = tauri::menu::MenuItem::with_id(app, "trigger_shortcut", "⌨️ Clean Clipboard (Cmd+Shift+C)", true, None::<&str>)?;
             let separator2 = tauri::menu::PredefinedMenuItem::separator(app)?;
             let settings = tauri::menu::MenuItem::with_id(app, "settings", "⚙️ Settings", true, None::<&str>)?;
             let about = tauri::menu::MenuItem::with_id(app, "about", "ℹ️ About Clipify", true, None::<&str>)?;
@@ -773,20 +840,45 @@ pub fn run() {
         })
         .manage(WindowState::default())
         .invoke_handler(tauri::generate_handler![
-            copy_selected_text_to_clipboard,
-            show_main_window,
-            hide_main_window,
-            toggle_window_visibility,
-            quit_application,
-            check_accessibility_permissions,
-            get_clipboard_history,
-            add_to_clipboard_history,
-            remove_from_clipboard_history,
-            clear_clipboard_history,
-            search_clipboard_history,
-            get_clipboard_entry_by_id,
-            paste_from_history
-        ])
+             // Clipboard commands
+             get_clipboard_history,
+             add_to_clipboard_history,
+             remove_from_clipboard_history,
+             clear_clipboard_history,
+             search_clipboard_history,
+             get_clipboard_entry_by_id,
+             paste_from_history,
+             copy_selected_text_to_clipboard,
+             rephrase_text,
+             setup_global_shortcut,
+             
+             // Window commands
+             show_main_window,
+             hide_main_window,
+             toggle_window_visibility,
+             
+             // System commands
+             check_accessibility_permissions,
+             quit_application,
+             
+             // Hotkey permission commands
+             register_global_shortcut,
+             unregister_global_shortcut,
+             check_global_shortcut_registered,
+             check_accessibility_permissions_and_shortcut_status,
+             open_accessibility_settings,
+             get_macos_version,
+             get_accessibility_instructions,
+             
+             // Deep link commands
+             verify_deep_link_protocols,
+             check_protocol_registration,
+             get_pending_deep_link_events,
+             get_all_deep_link_events,
+             mark_deep_link_event_processed,
+             mark_deep_link_event_error,
+             clear_deep_link_events
+         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

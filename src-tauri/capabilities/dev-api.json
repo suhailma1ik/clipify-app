@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dev-api",
+  "description": "Capability for development API access to localhost",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "http:allow-fetch",
+    "http:allow-fetch-cancel",
+    "http:allow-fetch-read-body",
+    "http:allow-fetch-send",
+    "http:default"
+  ],
+  "remote": {
+    "urls": [
+      "https://clipify0.el.r.appspot.com",
+      "https://clipify0.el.r.appspot.com/*",
+      "http://127.0.0.1:8080",
+      "http://127.0.0.1:8080/*"
+    ]
+  }
+}

@@ -5,7 +5,7 @@
   "identifier": "com.suhailmalik.clipify",
   "build": {
     "beforeDevCommand": "NODE_ENV=production npm run dev",
-    "devUrl": "https://clipify.space/",
+    "devUrl": "https://clipify0.el.r.appspot.com/",
     "beforeBuildCommand": "NODE_ENV=production npm run build",
     "frontendDist": "../dist"
   },
@@ -33,12 +33,18 @@
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "capabilities": ["default", "dev-api"]
+    },
+    "macOSPrivateApi": true
   },
   "plugins": {
     "shell": {
       "open": true
+    },
+
+    "globalShortcut": {
+      "all": true
     }
   },
   "bundle": {

@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // Load environment variables based on NODE_ENV
@@ -28,7 +27,7 @@ export default defineConfig(async () => ({
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: envConfig.port,
-    strictPort: true,
+    strictPort: false,
     host: host || false,
     hmr: host
       ? {
@@ -46,6 +45,6 @@ export default defineConfig(async () => ({
   // Environment-specific logging
   logLevel: envConfig.logLevel as any,
   
-  // Base URL configuration
-  base: envConfig.baseUrl,
+  // Base URL configuration - use relative path for Tauri builds
+  base: './',
 }));

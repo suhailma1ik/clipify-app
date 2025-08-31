@@ -10,9 +10,15 @@
     "opener:default",
     "notification:default",
     "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     "deep-link:default",
     "store:default",
     "http:default",
-    "shell:allow-open"
+    "shell:allow-open",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-register-all",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all"
   ]
 }

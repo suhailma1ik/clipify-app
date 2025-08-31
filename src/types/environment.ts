@@ -5,16 +5,6 @@
 export type Environment = 'development' | 'production';
 
 /**
- * OAuth configuration interface
- */
-export interface OAuthConfig {
-  baseUrl: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string;
-}
-
-/**
  * API configuration interface
  */
 export interface ApiConfig {
@@ -45,7 +35,6 @@ export interface EnvironmentConfig {
   environment: Environment;
   frontend: FrontendConfig;
   api: ApiConfig;
-  oauth: OAuthConfig;
   tauri?: TauriConfig;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }
@@ -59,10 +48,6 @@ export interface EnvironmentVariables {
   PORT?: string;
   API_BASE_URL: string;
   API_TIMEOUT: string;
-  OAUTH_BASE_URL: string;
-  OAUTH_CLIENT_ID: string;
-  OAUTH_REDIRECT_URI: string;
-  OAUTH_SCOPE: string;
   TAURI_PORT?: string;
   TAURI_HMR_PORT?: string;
   LOG_LEVEL: string;
@@ -77,10 +62,6 @@ export interface ViteEnvironmentVariables {
   VITE_DEV_PORT?: string;
   VITE_DEV_API_BASE_URL?: string;
   VITE_DEV_API_TIMEOUT?: string;
-  VITE_DEV_OAUTH_BASE_URL?: string;
-  VITE_DEV_OAUTH_CLIENT_ID?: string;
-  VITE_DEV_OAUTH_REDIRECT_URI?: string;
-  VITE_DEV_OAUTH_SCOPE?: string;
   VITE_DEV_TAURI_PORT?: string;
   VITE_DEV_TAURI_HMR_PORT?: string;
   VITE_DEV_LOG_LEVEL?: string;
@@ -89,9 +70,39 @@ export interface ViteEnvironmentVariables {
   VITE_PROD_BASE_URL?: string;
   VITE_PROD_API_BASE_URL?: string;
   VITE_PROD_API_TIMEOUT?: string;
-  VITE_PROD_OAUTH_BASE_URL?: string;
-  VITE_PROD_OAUTH_CLIENT_ID?: string;
-  VITE_PROD_OAUTH_REDIRECT_URI?: string;
-  VITE_PROD_OAUTH_SCOPE?: string;
   VITE_PROD_LOG_LEVEL?: string;
+}
+
+/**
+ * Deep link configuration interface
+ */
+export interface DeepLinkConfig {
+  schemes: string[];
+  protocolRegistered: boolean;
+  tauriConfigPath: string;
+  environment: Environment;
+}
+
+/**
+ * Validation result interface
+ */
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  recommendations: string[];
+}
+
+/**
+ * Environment diagnostics interface
+ */
+export interface EnvironmentDiagnostics {
+  detectedEnvironment: Environment;
+  configurationSource: 'env-vars' | 'defaults' | 'mixed';
+  apiConfig: ApiConfig;
+  deepLinkConfig: DeepLinkConfig;
+  environmentVariables: Record<string, string | undefined>;
+  missingVariables: string[];
+  inconsistencies: string[];
+  timestamp: number;
 }

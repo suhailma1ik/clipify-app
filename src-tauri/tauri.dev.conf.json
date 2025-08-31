@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Clipify",
+  "productName": "Clipify Dev",
   "version": "0.1.0",
-  "identifier": "com.suhailmalik.clipify",
+  "identifier": "com.suhailmalik.clipify.dev",
   "build": {
-    "beforeDevCommand": "NODE_ENV=development npm run dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "NODE_ENV=development npm run build",
+    "beforeBuildCommand": "npm run build:dev",
     "frontendDist": "../dist"
   },
   "app": {
@@ -15,11 +15,11 @@
       "iconPath": "icons/32x32.png",
       "iconAsTemplate": true,
       "menuOnLeftClick": false,
-      "tooltip": "Clipify - Professional Text Cleanup Tool"
+      "tooltip": "Clipify Dev - Professional Text Cleanup Tool"
     },
     "windows": [
       {
-        "title": "Clipify (Development)",
+        "title": "Clipify Dev",
         "width": 800,
         "height": 600,
         "center": true,
@@ -33,12 +33,17 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": ["external-api"]
     }
   },
   "plugins": {
     "shell": {
       "open": true
+    },
+
+    "globalShortcut": {
+      "all": true
     }
   },
   "bundle": {
@@ -50,6 +55,21 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": [],
+    "copyright": "",
+    "category": "DeveloperTool",
+    "shortDescription": "",
+    "longDescription": "",
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "",
+      "exceptionDomain": ""
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }

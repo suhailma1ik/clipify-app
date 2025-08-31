@@ -1,3 +1,21 @@
+// Tauri environment detection
+export function isTauriEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  // Check for multiple Tauri indicators
+  return (
+    '__TAURI__' in window ||
+    '__TAURI_INTERNALS__' in window ||
+    'isTauri' in window ||
+    // Check for Tauri-specific APIs
+    (window as any).__TAURI_INVOKE__ !== undefined ||
+    // Check user agent for Tauri
+    navigator.userAgent.includes('Tauri') ||
+    // Check for file:// protocol (common in desktop apps)
+    window.location.protocol === 'tauri:'
+  );
+}
+
 // Text cleanup utility function
 export function cleanupText(text: string): string {
   // Handle null, undefined, or empty text
@@ -91,3 +109,7 @@ export const addHoverEffect = (element: HTMLElement, direction: 'up' | 'down' = 
 export const removeHoverEffect = (element: HTMLElement) => {
   element.style.transform = 'translateY(0)';
 };
+
+// Re-export utilities from other files
+export * from './clipboardUtils';
+export * from './statusUtils';
