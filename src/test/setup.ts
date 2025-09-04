@@ -10,7 +10,7 @@ Object.defineProperty(import.meta, 'env', {
     VITE_DEV_API_TIMEOUT: '10000',
     VITE_DEV_OAUTH_BASE_URL: 'https://clipify0.el.r.appspot.com/api/v1/auth/google/login',
     VITE_DEV_OAUTH_CLIENT_ID: 'clipify-desktop',
-    VITE_DEV_OAUTH_REDIRECT_URI: 'clipify://auth/callback',
+    VITE_DEV_OAUTH_REDIRECT_URI: 'appclipify://auth/callback',
     VITE_DEV_OAUTH_SCOPE: 'openid email profile',
     VITE_DEV_TAURI_PORT: '1420',
     VITE_DEV_TAURI_HMR_PORT: '1421',
@@ -20,7 +20,7 @@ Object.defineProperty(import.meta, 'env', {
     VITE_PROD_API_TIMEOUT: '30000',
     VITE_PROD_OAUTH_BASE_URL: 'https://clipify0.el.r.appspot.com/api/v1/auth/google/login',
     VITE_PROD_OAUTH_CLIENT_ID: 'clipify-desktop',
-    VITE_PROD_OAUTH_REDIRECT_URI: 'clipify://auth/callback',
+    VITE_PROD_OAUTH_REDIRECT_URI: 'appclipify://auth/callback',
     VITE_PROD_OAUTH_SCOPE: 'openid email profile',
     VITE_PROD_LOG_LEVEL: 'info'
   }

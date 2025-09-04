@@ -16,6 +16,7 @@ export const appStyles = {
     background: COLORS.white,
     minHeight: "100vh",
     padding: "24px",
+    overflow: "hidden",
   } as CSSProperties,
 
   card: {

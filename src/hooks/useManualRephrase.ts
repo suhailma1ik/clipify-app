@@ -1,23 +1,23 @@
 import { useState, useCallback } from 'react';
 import { rephraseService } from '../services/rephraseService';
 import { writeToClipboard, statusMessages, getCurrentTimestamp, resetStatusAfterDelay } from '../utils';
+import { useAuthErrorHandler } from './useAuthErrorHandler';
 
 interface UseManualRephraseProps {
-  hasJwtToken: boolean;
+  isAuthenticated: boolean;
   showNotification: (message: string, type: 'success' | 'error' | 'info') => void;
-  setShowTokenInput: (show: boolean) => void;
   setShortcutStatus: (status: string) => void;
 }
 
 export const useManualRephrase = ({
-  hasJwtToken,
+  isAuthenticated,
   showNotification,
-  setShowTokenInput,
   setShortcutStatus
 }: UseManualRephraseProps) => {
   const [manualText, setManualText] = useState<string>("");
   const [rephrasedText, setRephrasedText] = useState<string>("");
   const [isRephrasingManual, setIsRephrasingManual] = useState<boolean>(false);
+  const { handleError, isAuthError } = useAuthErrorHandler();
 
   const handleManualRephrase = useCallback(async () => {
     console.log('[useManualRephrase] handleManualRephrase called with text:', manualText);
@@ -27,9 +27,8 @@ export const useManualRephrase = ({
       return;
     }
 
-    if (!hasJwtToken) {
-      showNotification('JWT token is required for rephrasing', 'error');
-      setShowTokenInput(true);
+    if (!isAuthenticated) {
+      showNotification('Authentication is required for rephrasing', 'error');
       return;
     }
 
@@ -54,16 +53,23 @@ export const useManualRephrase = ({
     } catch (error) {
       console.error('[useManualRephrase] Failed to rephrase manual text:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setShortcutStatus(statusMessages.error(errorMessage));
-      showNotification(
-        `Failed to rephrase text: ${errorMessage}`,
-        'error'
-      );
+      
+      // Handle authentication errors
+      if (error instanceof Error && isAuthError(error)) {
+        await handleError(error, 'useManualRephrase');
+        showNotification('Authentication expired. Please log in again.', 'error');
+      } else {
+        setShortcutStatus(statusMessages.error(errorMessage));
+        showNotification(
+          `Failed to rephrase text: ${errorMessage}`,
+          'error'
+        );
+      }
     } finally {
       setIsRephrasingManual(false);
       resetStatusAfterDelay(setShortcutStatus);
     }
-  }, [manualText, showNotification, hasJwtToken, setShowTokenInput, setShortcutStatus]);
+  }, [manualText, showNotification, isAuthenticated, setShortcutStatus]);
 
   return {
     manualText,

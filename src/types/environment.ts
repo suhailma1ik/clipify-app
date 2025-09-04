@@ -13,6 +13,16 @@ export interface ApiConfig {
 }
 
 /**
+ * OAuth configuration interface
+ */
+export interface OAuthConfig {
+  baseUrl: string;
+  clientId: string;
+  redirectUri: string;
+  scope: string;
+}
+
+/**
  * Frontend configuration interface
  */
 export interface FrontendConfig {
@@ -35,6 +45,7 @@ export interface EnvironmentConfig {
   environment: Environment;
   frontend: FrontendConfig;
   api: ApiConfig;
+  oauth: OAuthConfig;
   tauri?: TauriConfig;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
 }

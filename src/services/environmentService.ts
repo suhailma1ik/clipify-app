@@ -1,4 +1,4 @@
-import { Environment, EnvironmentConfig, ApiConfig } from '../types/environment';
+import { Environment, EnvironmentConfig, ApiConfig, OAuthConfig } from '../types/environment';
 
 /**
  * Detect current environment with improved logic
@@ -101,7 +101,7 @@ const getApiConfig = (environment: Environment): ApiConfig => {
   
   // Development configuration
   const config = {
-    baseUrl: import.meta.env.VITE_DEV_API_BASE_URL || 'https://clipify0.el.r.appspot.com',
+    baseUrl: import.meta.env.VITE_DEV_API_BASE_URL || 'http://localhost:8080',
     timeout: parseInt(import.meta.env.VITE_DEV_API_TIMEOUT || '10000')
   };
   console.log('[EnvironmentService] Development API config:', config);
@@ -109,6 +109,36 @@ const getApiConfig = (environment: Environment): ApiConfig => {
 };
 
 
+
+/**
+ * Get OAuth configuration based on environment
+ * @param environment Current environment
+ * @returns OAuth configuration
+ */
+const getOAuthConfig = (environment: Environment): OAuthConfig => {
+  console.log('[EnvironmentService] Getting OAuth config for environment:', environment);
+  
+  if (environment === 'production') {
+    const config = {
+      baseUrl: import.meta.env.VITE_PROD_OAUTH_BASE_URL || 'https://clipify0.el.r.appspot.com/api/v1/auth/google/login',
+      clientId: import.meta.env.VITE_PROD_OAUTH_CLIENT_ID || 'clipify-desktop',
+      redirectUri: import.meta.env.VITE_PROD_OAUTH_REDIRECT_URI || 'clipify://auth/callback',
+      scope: import.meta.env.VITE_PROD_OAUTH_SCOPE || 'openid email profile'
+    };
+    console.log('[EnvironmentService] Production OAuth config:', config);
+    return config;
+  }
+  
+  // Development configuration
+  const config = {
+    baseUrl: import.meta.env.VITE_DEV_OAUTH_BASE_URL || 'https://clipify0.el.r.appspot.com/api/v1/auth/google/login',
+    clientId: import.meta.env.VITE_DEV_OAUTH_CLIENT_ID || 'clipify-desktop',
+    redirectUri: import.meta.env.VITE_DEV_OAUTH_REDIRECT_URI || 'clipify://auth/callback',
+    scope: import.meta.env.VITE_DEV_OAUTH_SCOPE || 'openid email profile'
+  };
+  console.log('[EnvironmentService] Development OAuth config:', config);
+  return config;
+};
 
 /**
  * Get Tauri-specific configuration based on environment
@@ -169,6 +199,7 @@ export const getEnvironmentConfig = (environment?: Environment): EnvironmentConf
     environment: env,
     frontend: getFrontendConfig(env),
     api: getApiConfig(env),
+    oauth: getOAuthConfig(env),
     tauri: getTauriConfig(env),
     logLevel: getLogLevel(env) as 'debug' | 'info' | 'warn' | 'error'
   };

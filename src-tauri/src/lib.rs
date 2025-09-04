@@ -848,7 +848,7 @@ pub fn run() {
              search_clipboard_history,
              get_clipboard_entry_by_id,
              paste_from_history,
-             copy_selected_text_to_clipboard,
+             trigger_clipboard_copy,
              rephrase_text,
              setup_global_shortcut,
              
@@ -859,12 +859,8 @@ pub fn run() {
              
              // System commands
              check_accessibility_permissions,
-             quit_application,
              
              // Hotkey permission commands
-             register_global_shortcut,
-             unregister_global_shortcut,
-             check_global_shortcut_registered,
              check_accessibility_permissions_and_shortcut_status,
              open_accessibility_settings,
              get_macos_version,

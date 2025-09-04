@@ -27,7 +27,8 @@ export const addToClipboardHistory = async (
 };
 
 /**
- * Setup global shortcut for clipboard monitoring
+ * Setup global shortcut for clipboard monitoring using Tauri v2 API
+ * This function now uses the frontend API instead of backend commands
  */
 export const setupGlobalShortcut = async (): Promise<void> => {
   if (!isTauriEnvironment()) {
@@ -36,10 +37,38 @@ export const setupGlobalShortcut = async (): Promise<void> => {
   }
   
   try {
-    await invoke('setup_global_shortcut');
-    console.log('Global shortcut setup completed');
+    // Use Tauri v2 frontend API
+    const { isRegistered, register } = await import('@tauri-apps/plugin-global-shortcut');
+    
+    // First check if shortcut is already registered
+    const alreadyRegistered = await isRegistered('CommandOrControl+Shift+C');
+    if (alreadyRegistered) {
+      console.log('Global shortcut already registered');
+      return;
+    }
+
+    // Check accessibility permissions first
+    try {
+      await invoke('check_accessibility_permissions');
+      console.log('Accessibility permissions verified');
+    } catch (error) {
+      throw new Error('Accessibility permissions required. Please grant permissions through the UI.');
+    }
+
+    // Register the global shortcut using Tauri v2 API
+    await register('CommandOrControl+Shift+C', (event) => {
+      console.log('Global shortcut triggered:', event);
+      if (event.state === 'Pressed') {
+        // Trigger the clipboard copy and clean functionality
+        invoke('trigger_clipboard_copy').catch(err => {
+          console.error('Failed to copy selected text:', err);
+        });
+      }
+    });
+    
+    console.log('Global shortcut registered successfully using Tauri v2 API');
   } catch (error) {
-    console.error('Failed to setup global shortcut:', error);
+    console.error('Failed to register global shortcut:', error);
     throw error;
   }
 };

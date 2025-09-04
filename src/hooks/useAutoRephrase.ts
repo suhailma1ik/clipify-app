@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { rephraseService } from '../services/rephraseService';
 import { getApiClient } from '../services/apiClient';
 import { writeToClipboard, statusMessages, getCurrentTimestamp, resetStatusAfterDelay } from '../utils';
+import { getAuthErrorHandler } from '../services/authErrorHandler';
 
 interface UseAutoRephraseProps {
   showNotification: (message: string, type: 'success' | 'error' | 'info') => void;
@@ -12,6 +13,7 @@ export const useAutoRephrase = ({
   showNotification,
   setShortcutStatus
 }: UseAutoRephraseProps) => {
+  const authErrorHandler = getAuthErrorHandler();
   
   const setupAutoRephraseListener = useCallback(async () => {
     try {
@@ -41,9 +43,9 @@ export const useAutoRephrase = ({
           }
 
           if (!currentJwtToken) {
-            console.log('[useAutoRephrase] JWT token not available for auto-rephrase');
+            console.log('[useAutoRephrase] Authentication token not available for auto-rephrase');
             setShortcutStatus(statusMessages.tokenRequired);
-            showNotification('JWT token is required for rephrasing shortcut', 'error');
+            showNotification('Authentication is required for rephrasing shortcut', 'error');
             return;
           }
 
@@ -69,12 +71,18 @@ export const useAutoRephrase = ({
         } catch (error) {
           console.error('[useAutoRephrase] Failed to rephrase text:', error);
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          setShortcutStatus(statusMessages.error(errorMessage));
-
-          showNotification(
-            `Failed to rephrase text: ${errorMessage}`,
-            'error'
-          );
+          
+          // Handle authentication errors
+          if (error instanceof Error && authErrorHandler.isAuthError(error)) {
+            await authErrorHandler.handleAuthError(error, 'useAutoRephrase');
+            showNotification('Authentication expired. Please log in again.', 'error');
+          } else {
+            setShortcutStatus(statusMessages.error(errorMessage));
+            showNotification(
+              `Failed to rephrase text: ${errorMessage}`,
+              'error'
+            );
+          }
         } finally {
           resetStatusAfterDelay(setShortcutStatus);
         }

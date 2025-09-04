@@ -18,7 +18,7 @@
         <p>Click the button below to test if the app can handle the authentication callback:</p>
         <button onclick="testDeepLink()">Test Deep Link</button>
         <br>
-        <input type="text" id="testUrl" value="clipify://auth/callback?auth_code=test123&state=test456" placeholder="Enter test URL">
+        <input type="text" id="testUrl" value="appclipify://auth/callback?auth_code=test123&state=test456" placeholder="Enter test URL">
         <button onclick="customTest()">Test Custom URL</button>
     </div>
 
@@ -55,7 +55,7 @@
         }
 
         function testDeepLink() {
-            const url = 'clipify://auth/callback?auth_code=real_test_code&state=real_test_state';
+            const url = 'appclipify://auth/callback?auth_code=real_test_code&state=real_test_state';
             addLog(`Attempting to open: ${url}`);
             
             try {
@@ -97,9 +97,9 @@
             
             // Test if we can create clipify URLs
             try {
-                new URL('clipify://auth/callback?test=test');
-                result.innerHTML += '<br>✓ clipify:// URL scheme is valid';
-                addLog('clipify:// URL scheme is properly formatted');
+                new URL('appclipify://auth/callback?test=test');
+                result.innerHTML += '<br>✓ appclipify:// URL scheme is valid';
+                addLog('appclipify:// URL scheme is properly formatted');
             } catch (error) {
                 result.innerHTML += '<br>✗ clipify:// URL scheme is invalid';
                 addLog('clipify:// URL scheme appears invalid');
@@ -112,7 +112,7 @@
                 const baseUrl = 'https://clipify0.el.r.appspot.com/api/v1/auth/google/login';
                 const params = new URLSearchParams({
                     client_type: 'desktop',
-                    redirect: 'clipify://auth/callback',
+                    redirect: 'appclipify://auth/callback',
                     state: 'debug_' + Math.random().toString(36).substr(2, 9),
                     code_challenge: 'debug_challenge',
                     code_challenge_method: 'S256'

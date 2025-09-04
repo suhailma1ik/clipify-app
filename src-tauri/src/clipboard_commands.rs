@@ -1,7 +1,10 @@
 use crate::clipboard::{save_history_to_file, ClipboardEntry, ClipboardHistoryState};
 use crate::config::RephraseResponse;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use serde::{Deserialize, Serialize};
 
 // Clipboard History Commands
 #[tauri::command]
@@ -177,6 +180,11 @@ fn cleanup_text(text: &str) -> String {
 }
 
 #[tauri::command]
+pub async fn trigger_clipboard_copy(app: AppHandle) -> Result<String, String> {
+    let history_state = app.state::<ClipboardHistoryState>();
+    copy_selected_text_to_clipboard(app.clone(), history_state).await
+}
+
 pub async fn copy_selected_text_to_clipboard(
     app: AppHandle,
     history_state: tauri::State<'_, ClipboardHistoryState>,

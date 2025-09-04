@@ -1,5 +1,8 @@
 import { ApiConfig } from '../types/environment';
 import { fetch } from '@tauri-apps/plugin-http';
+import { getSecureTokenStorage } from './secureTokenStorage';
+import { getTokenRefreshService } from './tokenRefreshService';
+import { getAuthErrorHandler } from './authErrorHandler';
 
 /**
  * HTTP method types
@@ -31,6 +34,8 @@ export class ApiClientService {
   private config: ApiConfig;
   private readonly defaultHeaders: Record<string, string>;
   private jwtToken: string | null = null;
+  private tokenStorage = getSecureTokenStorage();
+  private tokenRefreshService = getTokenRefreshService();
 
   constructor(config: ApiConfig) {
     this.config = config;
@@ -55,6 +60,29 @@ export class ApiClientService {
    */
   getJwtToken(): string | null {
     return this.jwtToken;
+  }
+
+  /**
+   * Attempt to refresh the access token using refresh token
+   * @returns Promise resolving to true if refresh was successful
+   */
+  private async attemptTokenRefresh(): Promise<boolean> {
+    try {
+      console.log('[ApiClientService] Attempting to refresh access token');
+      
+      const refreshSuccessful = await this.tokenRefreshService.refreshToken();
+      
+      if (refreshSuccessful) {
+        // Update the JWT token in this service with the new token
+        this.jwtToken = await this.tokenRefreshService.getCurrentAccessToken();
+        console.log('[ApiClientService] Token refresh completed successfully');
+      }
+      
+      return refreshSuccessful;
+    } catch (error) {
+      console.error('[ApiClientService] Token refresh failed with error:', error);
+      return false;
+    }
   }
 
   /**
@@ -133,8 +161,81 @@ export class ApiClientService {
 
       // Handle non-2xx responses
       if (!response.ok) {
-        console.error('[ApiClientService] Request failed:', response.status, data);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Handle 401 Unauthorized with token refresh attempt
+        if (response.status === 401 && this.jwtToken) {
+          console.warn('[ApiClientService] Received 401, attempting token refresh');
+          
+          const refreshSuccessful = await this.attemptTokenRefresh();
+          
+          if (refreshSuccessful) {
+            console.log('[ApiClientService] Token refresh successful, retrying request');
+            
+            // Retry the request with the new token
+            const retryHeaders = {
+              ...this.defaultHeaders,
+              ...headers
+            };
+            
+            if (this.jwtToken && (endpoint.includes('/protected/') || headers['Authorization'])) {
+              retryHeaders['Authorization'] = `Bearer ${this.jwtToken}`;
+            }
+            
+            const retryResponse = await fetch(url, {
+              method,
+              headers: retryHeaders,
+              body: requestBody
+            });
+
+            console.log('[ApiClientService] Retry response status:', retryResponse.status, retryResponse.statusText);
+
+            // Parse retry response data
+            let retryData: T;
+            try {
+              retryData = await retryResponse.json();
+            } catch (jsonError) {
+              try {
+                retryData = await retryResponse.text() as any;
+              } catch (textError) {
+                console.error('[ApiClientService] Failed to parse retry response:', jsonError, textError);
+                retryData = null as any;
+              }
+            }
+
+            if (retryResponse.ok) {
+              console.log('[ApiClientService] Retry request successful after token refresh');
+              return {
+                data: retryData,
+                status: retryResponse.status,
+                statusText: retryResponse.statusText || 'OK'
+              };
+            } else {
+              console.error('[ApiClientService] Retry request also failed:', retryResponse.status, retryData);
+              throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+            }
+          } else {
+            console.error('[ApiClientService] Token refresh failed, original request failed with 401');
+            
+            // Clear the JWT token since refresh failed
+            this.jwtToken = null;
+            
+            // Check if we still have any tokens - if not, the refresh service already cleared them
+            const hasValidToken = await this.tokenStorage.hasValidAccessToken();
+            const hasRefreshToken = await this.tokenStorage.hasRefreshToken();
+            
+            if (!hasValidToken && !hasRefreshToken) {
+              // Tokens were cleared by refresh service, need to trigger logout
+              console.warn('[ApiClientService] All tokens cleared due to refresh failure, user needs to re-authenticate');
+              const authError = new Error('AUTHENTICATION_REQUIRED');
+              await getAuthErrorHandler().handleAuthError(authError, 'ApiClientService.request');
+              throw authError;
+            }
+            
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - Token refresh failed`);
+          }
+        } else {
+          console.error('[ApiClientService] Request failed:', response.status, data);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
 
       console.log('[ApiClientService] Request successful');
@@ -145,6 +246,13 @@ export class ApiClientService {
       };
     } catch (error) {
       console.error('[ApiClientService] Request error:', error);
+      
+      // Handle authentication errors
+      const authErrorHandler = getAuthErrorHandler();
+      if (authErrorHandler.isAuthError(error as Error)) {
+        await authErrorHandler.handleAuthError(error as Error, 'ApiClientService.request');
+      }
+      
       throw error;
     }
   }

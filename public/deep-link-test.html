@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipify Deep Link Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-link {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 8px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .test-link:hover {
+            background: #0056b3;
+        }
+        .test-link.dev {
+            background: #28a745;
+        }
+        .test-link.dev:hover {
+            background: #1e7e34;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 8px 0;
+            word-break: break-all;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 Clipify Deep Link Test Page</h1>
+    
+    <div class="section warning">
+        <h3>⚠️ Before Testing</h3>
+        <p>Make sure Clipify is built and running on your system. The deep link protocol is only registered when the app is installed/running.</p>
+    </div>
+
+    <div class="section">
+        <h3>🧪 Production Deep Links (clipify://)</h3>
+        <p>These links simulate the OAuth callback from your server:</p>
+        
+        <a href="clipify://auth?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test&user_id=123e4567-e89b-12d3-a456-426614174000&email=user@example.com&plan=free" class="test-link">
+            Test Auth Callback (Free Plan)
+        </a>
+        
+        <a href="clipify://auth?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.premium&user_id=456e7890-e89b-12d3-a456-426614174001&email=premium@example.com&plan=premium" class="test-link">
+            Test Auth Callback (Premium Plan)
+        </a>
+        
+        <a href="clipify://auth?token=invalid_token&user_id=invalid&email=invalid@example.com&plan=free" class="test-link">
+            Test Invalid Token
+        </a>
+    </div>
+
+    <div class="section">
+        <h3>🛠️ Development Deep Links (clipify-dev://)</h3>
+        <p>These links are for development/testing:</p>
+        
+        <a href="clipify-dev://auth?token=dev_token_123&user_id=dev-user-456&email=dev@example.com&plan=free" class="test-link dev">
+            Test Dev Auth Callback
+        </a>
+        
+        <a href="clipify-dev://test?message=hello&timestamp=1234567890" class="test-link dev">
+            Test Generic Deep Link
+        </a>
+    </div>
+
+    <div class="section">
+        <h3>📋 Manual Test URLs</h3>
+        <p>Copy and paste these URLs into your terminal or browser address bar:</p>
+        
+        <div class="code">clipify://auth?token=manual_test_token&user_id=manual_user&email=manual@example.com&plan=free</div>
+        <div class="code">clipify-dev://auth?token=dev_manual_token&user_id=dev_manual_user&email=dev@example.com&plan=premium</div>
+    </div>
+
+    <div class="section">
+        <h3>🔧 Terminal Commands</h3>
+        <p>Run these commands in your terminal to test deep links:</p>
+        
+        <h4>macOS:</h4>
+        <div class="code">open "clipify://auth?token=terminal_test&user_id=terminal_user&email=terminal@example.com&plan=free"</div>
+        
+        <h4>Linux:</h4>
+        <div class="code">xdg-open "clipify://auth?token=terminal_test&user_id=terminal_user&email=terminal@example.com&plan=free"</div>
+        
+        <h4>Windows:</h4>
+        <div class="code">start "clipify://auth?token=terminal_test&user_id=terminal_user&email=terminal@example.com&plan=free"</div>
+    </div>
+
+    <div class="section success">
+        <h3>✅ What Should Happen</h3>
+        <ol>
+            <li>Click a test link above</li>
+            <li>Your browser may ask for permission to open Clipify</li>
+            <li>Clipify should open (if not already running)</li>
+            <li>The Deep Link Tester component should show the received URL</li>
+            <li>If it's an auth callback, you should be logged in automatically</li>
+        </ol>
+    </div>
+
+    <div class="section">
+        <h3>🐛 Troubleshooting</h3>
+        <ul>
+            <li><strong>Nothing happens:</strong> The protocol might not be registered. Try building and running Clipify first.</li>
+            <li><strong>Browser blocks the link:</strong> Some browsers block custom protocols. Try copying the URL to terminal instead.</li>
+            <li><strong>App doesn't receive the link:</strong> Check the Deep Link Tester component in the app for debugging info.</li>
+            <li><strong>Authentication fails:</strong> The test tokens are fake - real authentication requires valid JWT tokens from your server.</li>
+        </ul>
+    </div>
+
+    <script>
+        // Add click tracking for debugging
+        document.querySelectorAll('.test-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                console.log('Deep link clicked:', this.href);
+                
+                // Show a temporary message
+                const originalText = this.textContent;
+                this.textContent = 'Opening...';
+                this.style.opacity = '0.7';
+                
+                setTimeout(() => {
+                    this.textContent = originalText;
+                    this.style.opacity = '1';
+                }, 2000);
+            });
+        });
+
+        // Log page load
+        console.log('Clipify Deep Link Test Page loaded');
+        console.log('Available test links:', document.querySelectorAll('.test-link').length);
+    </script>
+</body>
+</html>

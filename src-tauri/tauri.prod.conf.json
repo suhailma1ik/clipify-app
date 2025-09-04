@@ -42,9 +42,11 @@
     "shell": {
       "open": true
     },
-
     "globalShortcut": {
       "all": true
+    },
+    "deep-link": {
+      "schemes": ["clipify"]
     }
   },
   "bundle": {

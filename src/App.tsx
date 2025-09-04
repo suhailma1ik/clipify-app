@@ -3,50 +3,43 @@ import "./App.css";
 
 // Import components and utilities
 import {
-  Footer,
   NotificationBanner,
-  JwtTokenInput,
-  JwtTokenManager,
   ManualRephraseSection,
-  HotkeyPermissionRequest,
-} from './components';
-import { appStyles } from './styles/AppStyles';
+  AuthManager,
+  HotkeyPermissionManager,
+} from "./components";
+import { appStyles } from "./styles/AppStyles";
 import {
   useNotification,
-  useJwtToken,
   useClipboardHistory,
   useTextProcessing,
   useAutoRephrase,
   useManualRephrase,
   useClipboardMonitoring,
   useShortcutStatus,
-  useHotkeyPermission
-} from './hooks';
+  useAuth,
+  useAuthTokenSync,
+} from "./hooks";
 
 function App() {
   // Use custom hooks for state management
-  const { notification, showNotification, clearNotification } = useNotification();
-  const { showTokenInput, setShowTokenInput, saveJwtToken, clearJwtToken, hasJwtToken } = useJwtToken();
+  const { notification, showNotification, clearNotification } =
+    useNotification();
   const { loadClipboardHistory } = useClipboardHistory();
-  const { setCleanedText } = useTextProcessing(showNotification, loadClipboardHistory);
-  const { shortcutStatus, setShortcutStatus } = useShortcutStatus();
-  
-  // Hotkey permission management
-  const {
-    permissionStatus,
-    showPermissionRequest,
-    hasPermission,
-    isRequesting,
-    error: permissionError,
-    requestPermission,
-    grantPermission,
-    denyPermission,
-  } = useHotkeyPermission();
+  const { setCleanedText } = useTextProcessing(
+    showNotification,
+    loadClipboardHistory
+  );
+  const { setShortcutStatus } = useShortcutStatus();
+  const { isAuthenticated } = useAuth();
+
+  // Sync JWT tokens from auth service to API client
+  useAuthTokenSync();
 
   // Auto-rephrase functionality (triggered by Cmd+Shift+C global shortcut)
   const { setupAutoRephraseListener } = useAutoRephrase({
     showNotification,
-    setShortcutStatus
+    setShortcutStatus,
   });
 
   // Manual rephrase functionality (for UI-based rephrasing)
@@ -55,19 +48,18 @@ function App() {
     setManualText,
     rephrasedText,
     isRephrasingManual,
-    handleManualRephrase
+    handleManualRephrase,
   } = useManualRephrase({
-    hasJwtToken,
+    isAuthenticated,
     showNotification,
-    setShowTokenInput,
-    setShortcutStatus
+    setShortcutStatus,
   });
 
   // Clipboard monitoring functionality (event-driven via Cmd+Shift+C global shortcut)
   const { setupClipboardMonitoring } = useClipboardMonitoring({
     setCleanedText,
     loadClipboardHistory,
-    setShortcutStatus
+    setShortcutStatus,
   });
 
   // Setup event listeners and global shortcut
@@ -78,148 +70,74 @@ function App() {
     // Load clipboard history on mount
     loadClipboardHistory();
 
-    // Only setup listeners if hotkey permission is granted
-    if (hasPermission) {
-      // Setup event listeners and store cleanup functions
-      let unlistenAutoRephrase: (() => void) | undefined;
-      let cleanupClipboardMonitoring: (() => void) | undefined;
+    // Setup event listeners and store cleanup functions
+    let unlistenAutoRephrase: (() => void) | undefined;
+    let cleanupClipboardMonitoring: (() => void) | undefined;
 
-      // Setup auto-rephrase listener
-      setupAutoRephraseListener().then(unlisten => {
-        if (mounted && unlisten) {
-          unlistenAutoRephrase = unlisten;
-        }
-      });
+    // Setup auto-rephrase listener
+    setupAutoRephraseListener().then((unlisten) => {
+      if (mounted && unlisten) {
+        unlistenAutoRephrase = unlisten;
+      }
+    });
 
-      // Setup clipboard monitoring
-      setupClipboardMonitoring().then(cleanup => {
-        if (mounted && cleanup) {
-          cleanupClipboardMonitoring = cleanup;
-        }
-      });
-
-      return () => {
-        mounted = false;
-        // Cleanup event listeners
-        if (unlistenAutoRephrase) {
-          unlistenAutoRephrase();
-        }
-        if (cleanupClipboardMonitoring) {
-          cleanupClipboardMonitoring();
-        }
-      };
-    } else if (permissionStatus === 'unknown') {
-      // Request permission on first load
-      requestPermission();
-    }
+    // Setup clipboard monitoring
+    setupClipboardMonitoring().then((cleanup) => {
+      if (mounted && cleanup) {
+        cleanupClipboardMonitoring = cleanup;
+      }
+    });
 
     return () => {
       mounted = false;
-    };
-  }, [loadClipboardHistory, setCleanedText, setupAutoRephraseListener, setupClipboardMonitoring, hasPermission, permissionStatus, requestPermission]);
-
-
-  console.log(shortcutStatus);
-
-  const getStatusMessage = () => {
-    if (hasPermission) {
-      return shortcutStatus;
-    } else if (permissionStatus === 'denied') {
-      if (permissionError) {
-        return permissionError;
+      // Cleanup event listeners
+      if (unlistenAutoRephrase) {
+        unlistenAutoRephrase();
       }
-      return 'Hotkey access denied. Manual rephrase available below.';
-    } else {
-      return 'Hotkey permission required for global shortcuts.';
-    }
-  };
+      if (cleanupClipboardMonitoring) {
+        cleanupClipboardMonitoring();
+      }
+    };
+  }, [
+    loadClipboardHistory,
+    setCleanedText,
+    setupAutoRephraseListener,
+    setupClipboardMonitoring,
+  ]);
+
 
   return (
     <main className="container" style={appStyles.mainContainer}>
-      {/* Professional Header */}
-      {/* <Header /> */}
-
-      {/* Hotkey Permission Request */}
-      {showPermissionRequest && (
-        <HotkeyPermissionRequest
-          onGrantPermission={grantPermission}
-          onDenyPermission={denyPermission}
-          isRequesting={isRequesting}
-        />
-      )}
-
-      {/* Notification Display */}
       <NotificationBanner
         notification={notification}
         onDismiss={clearNotification}
       />
 
-      {/* JWT Token Input Section */}
-      {showTokenInput && (
-        <JwtTokenInput
-          onSaveToken={saveJwtToken}
-          onCancel={() => setShowTokenInput(false)}
-          showNotification={showNotification}
-        />
-      )}
+      {!isAuthenticated && <AuthManager showUserInfo={true} compact={false} />}
 
-      {/* JWT Token Management Section */}
-      {!showTokenInput && (
-        <JwtTokenManager
-          hasToken={hasJwtToken}
-          onShowTokenInput={() => setShowTokenInput(true)}
-          onClearToken={clearJwtToken}
-          showNotification={showNotification}
-        />
-      )}
-
-      {/* Status Display Section */}
-      <div style={appStyles.card}>
-        <div style={appStyles.rowCenter}>
-          <div style={appStyles.iconBox}>
-            <span style={appStyles.iconLarge}>
-              {hasPermission ? '⌨️' : permissionStatus === 'denied' ? '🚫' : '🔐'}
-            </span>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h3 style={appStyles.h3Title}>Global Shortcut Status</h3>
-            <p style={{
-              ...appStyles.mutedText,
-              color: hasPermission ? '#4caf50' : permissionStatus === 'denied' ? '#f44336' : '#ff9800'
-            }}>
-              {getStatusMessage()}
-            </p>
-            {permissionStatus === 'denied' && permissionError && permissionError.includes('Accessibility') && (
-              <button
-                onClick={requestPermission}
-                style={{
-                  marginTop: '8px',
-                  padding: '8px 16px',
-                  backgroundColor: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
-              >
-                Retry Permission Setup
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Manual Text Rephrase Section */}
-      <ManualRephraseSection
-        manualText={manualText}
-        setManualText={setManualText}
-        rephrasedText={rephrasedText}
-        isRephrasingManual={isRephrasingManual}
-        onRephrase={handleManualRephrase}
+      {/* Hotkey Permission Manager */}
+      <HotkeyPermissionManager 
+        onPermissionGranted={() => {
+          console.log('Accessibility permissions granted');
+        }}
+        onShortcutRegistered={() => {
+          console.log('Global shortcut registered successfully');
+          // Retry clipboard monitoring setup after shortcut registration
+          setupClipboardMonitoring();
+        }}
       />
+      {/* Manual Text Rephrase Section - Only show when authenticated */}
+      {isAuthenticated && (
+        <ManualRephraseSection
+          manualText={manualText}
+          setManualText={setManualText}
+          rephrasedText={rephrasedText}
+          isRephrasingManual={isRephrasingManual}
+          onRephrase={handleManualRephrase}
+        />
+      )}
 
-      <Footer />
+      {/* <Footer /> */}
     </main>
   );
 }

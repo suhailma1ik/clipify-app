@@ -19,6 +19,7 @@ export const useClipboardMonitoring = ({
   const setupClipboardMonitoring = useCallback(async () => {
     try {
       // Setup global shortcut (Cmd+Shift+C) - this is handled by Rust backend
+      // Note: This will only succeed if accessibility permissions are granted
       await setupGlobalShortcut();
       console.log('[useClipboardMonitoring] Global shortcut setup complete - clipboard monitoring is now event-driven');
 

@@ -2,247 +2,187 @@ import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { isTauriEnvironment } from '../utils';
 
-type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'requesting';
-
-interface HotkeyPermissionState {
-  status: PermissionStatus;
-  showPermissionRequest: boolean;
-  error: string | null;
+interface PermissionStatus {
+  accessibility_granted: boolean;
+  shortcut_registered: boolean;
+  can_register_shortcut: boolean;
+  error_message: string | null;
+  needs_restart: boolean;
 }
 
-export const useHotkeyPermission = () => {
-  const [state, setState] = useState<HotkeyPermissionState>({
-    status: 'unknown',
-    showPermissionRequest: false,
-    error: null
-  });
+interface UseHotkeyPermissionReturn {
+  permissionStatus: PermissionStatus | null;
+  isLoading: boolean;
+  error: string | null;
+  checkPermissions: () => Promise<void>;
+  requestPermissions: () => Promise<void>;
+  registerShortcut: () => Promise<void>;
+  openAccessibilitySettings: () => Promise<void>;
+  refreshStatus: () => Promise<void>;
+}
 
-  // Check if permission was previously granted (stored in localStorage)
-  useEffect(() => {
-    const savedPermission = localStorage.getItem('hotkey-permission');
-    if (savedPermission === 'granted') {
-      setState(prev => ({ ...prev, status: 'granted' }));
-    } else if (savedPermission === 'denied') {
-      setState(prev => ({ ...prev, status: 'denied' }));
-    }
-  }, []);
+export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const requestPermission = useCallback(() => {
-    setState(prev => ({ 
-      ...prev, 
-      showPermissionRequest: true, 
-      error: null 
-    }));
-  }, []);
-
-  const grantPermission = useCallback(async () => {
-    console.log('🔐 Starting permission grant process...');
-    setState(prev => ({ ...prev, status: 'requesting' }));
-    
+  const checkPermissions = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      // In browser environment, we can't register global shortcuts
-      // but we can still grant "permission" for UI consistency
-      localStorage.setItem('hotkey-permission', 'denied');
-      
-      setState(prev => ({
-        ...prev,
-        status: 'denied',
-        showPermissionRequest: false,
-        error: 'Global shortcuts not available in browser environment'
-      }));
-      
-      return false;
+      console.warn('Permission checking not available in browser environment');
+      return;
     }
-    
+
+    setIsLoading(true);
+    setError(null);
+
     try {
-      // Use the comprehensive status check first
-      console.log('🔍 Checking comprehensive accessibility and shortcut status...');
-      const statusResult = await invoke('check_accessibility_permissions_and_shortcut_status');
-      console.log('📊 Status check result:', statusResult);
+      console.log('🔍 Checking accessibility permissions and shortcut status...');
       
-      if (typeof statusResult === 'object' && statusResult !== null) {
-        const status = statusResult as {
-          accessibility_granted: boolean;
-          shortcut_registered: boolean;
-          can_register_shortcut: boolean;
-          error_message: string | null;
-          needs_restart: boolean;
-        };
-        
-        if (!status.accessibility_granted) {
-          console.log('❌ Accessibility permissions not granted');
-          
-          // Show specific error message and open system preferences
-          const errorMessage = status.error_message || 'Accessibility permissions required for global shortcuts';
-          
-          setState(prev => ({
-            ...prev,
-            status: 'denied',
-            showPermissionRequest: false,
-            error: errorMessage + (status.needs_restart ? ' You may need to restart the app after granting permissions.' : '')
-          }));
-          
-          // Try to open System Preferences to the Accessibility section
-          console.log('🔧 Opening System Preferences...');
-          try {
-            await invoke('open_accessibility_settings');
-            console.log('✅ System Preferences opened successfully');
-          } catch (shellError) {
-            console.error('❌ Failed to open System Preferences:', shellError);
-            // Show a more helpful error message to the user
-            const detailedError = `${errorMessage}. Unable to automatically open System Settings. Please manually open System Settings > Privacy & Security > Accessibility and add Clipify.`;
-            setState(prev => ({
-              ...prev,
-              error: detailedError + (status.needs_restart ? ' You may need to restart the app after granting permissions.' : '')
-            }));
-          }
-          
-          return false;
-        }
-        
-        if (status.shortcut_registered) {
-          console.log('ℹ️ Global shortcut is already registered');
-          
-          // Save permission to localStorage
-          localStorage.setItem('hotkey-permission', 'granted');
-          
-          setState(prev => ({
-            ...prev,
-            status: 'granted',
-            showPermissionRequest: false,
-            error: null
-          }));
-          
-          return true;
-        }
-        
-        if (!status.can_register_shortcut) {
-          console.log('❌ Cannot register shortcut');
-          const errorMessage = status.error_message || 'Unable to register global shortcut';
-          
-          setState(prev => ({
-            ...prev,
-            status: 'denied',
-            showPermissionRequest: false,
-            error: errorMessage
-          }));
-          
-          return false;
-        }
+      // Check accessibility permissions using backend
+      let accessibilityGranted = false;
+      try {
+        await invoke('check_accessibility_permissions');
+        accessibilityGranted = true;
+      } catch (err) {
+        console.log('Accessibility permissions not granted:', err);
+        accessibilityGranted = false;
       }
-      
-      // Accessibility permissions are granted, now register the global shortcut
-      console.log('⌨️ Registering global shortcut...');
-      await invoke('register_global_shortcut');
-      console.log('✅ Global shortcut registered successfully');
-      
-      // Save permission to localStorage
-      localStorage.setItem('hotkey-permission', 'granted');
-      
-      setState(prev => ({
-        ...prev,
-        status: 'granted',
-        showPermissionRequest: false,
-        error: null
-      }));
-      
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to register hotkey';
-      console.log('❌ Permission grant failed:', errorMessage);
-      
-      setState(prev => ({
-        ...prev,
-        status: 'denied',
-        showPermissionRequest: false,
-        error: errorMessage
-      }));
-      
-      return false;
+
+      // Check if shortcut is registered using Tauri v2 API
+      let shortcutRegistered = false;
+      try {
+        const { isRegistered } = await import('@tauri-apps/plugin-global-shortcut');
+        shortcutRegistered = await isRegistered('CommandOrControl+Shift+C');
+      } catch (err) {
+        console.log('Could not check shortcut registration:', err);
+        shortcutRegistered = false;
+      }
+
+      const status: PermissionStatus = {
+        accessibility_granted: accessibilityGranted,
+        shortcut_registered: shortcutRegistered,
+        can_register_shortcut: accessibilityGranted,
+        error_message: null,
+        needs_restart: false
+      };
+
+      console.log('✅ Permission status received:', status);
+      setPermissionStatus(status);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Failed to check permissions:', errorMessage);
+      setError(errorMessage);
+      setPermissionStatus(null);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  const denyPermission = useCallback(() => {
-    // Save denial to localStorage
-    localStorage.setItem('hotkey-permission', 'denied');
-    
-    setState(prev => ({
-      ...prev,
-      status: 'denied',
-      showPermissionRequest: false,
-      error: null
-    }));
-  }, []);
-
-  const revokePermission = useCallback(async () => {
+  const requestPermissions = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      // In browser environment, just update local state
-      localStorage.removeItem('hotkey-permission');
-      
-      setState(prev => ({
-        ...prev,
-        status: 'denied',
-        showPermissionRequest: false,
-        error: null
-      }));
-      
-      return true;
+      console.warn('Permission request not available in browser environment');
+      return;
     }
-    
+
+    setIsLoading(true);
+    setError(null);
+
     try {
-      // Call Tauri command to unregister the global shortcut
-      await invoke('unregister_global_shortcut');
+      console.log('🔐 Requesting accessibility permissions...');
+      await invoke('open_accessibility_settings');
+      console.log('✅ Accessibility settings opened successfully');
       
-      // Remove permission from localStorage
-      localStorage.removeItem('hotkey-permission');
+      // Wait a moment then refresh status
+      setTimeout(() => {
+        checkPermissions();
+      }, 2000);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Failed to open accessibility settings:', errorMessage);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [checkPermissions]);
+
+  const registerShortcut = useCallback(async () => {
+    if (!isTauriEnvironment()) {
+      console.warn('Shortcut registration not available in browser environment');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('⌨️ Registering global shortcut using Tauri v2 API...');
       
-      setState(prev => ({
-        ...prev,
-        status: 'denied',
-        showPermissionRequest: false,
-        error: null
-      }));
+      // Use Tauri v2 frontend API instead of backend commands
+      const { register } = await import('@tauri-apps/plugin-global-shortcut');
       
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to revoke hotkey';
+      await register('CommandOrControl+Shift+C', (event) => {
+        console.log('Global shortcut triggered:', event);
+        if (event.state === 'Pressed') {
+          // Trigger the clipboard copy and clean functionality
+          // Use the proper command that handles the state internally
+          invoke('trigger_clipboard_copy').catch(err => {
+            console.error('Failed to copy selected text:', err);
+          });
+        }
+      });
       
-      setState(prev => ({
-        ...prev,
-        error: errorMessage
-      }));
+      console.log('✅ Global shortcut registered successfully using Tauri v2 API');
       
-      return false;
+      // Refresh status after registration
+      await checkPermissions();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Failed to register global shortcut:', errorMessage);
+      setError(errorMessage);
+      
+      // If it's a permission error, suggest opening settings
+      if (errorMessage.includes('permission') || errorMessage.includes('accessibility')) {
+        console.log('🔧 Permission error detected, user may need to grant accessibility permissions');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [checkPermissions]);
+
+  const openAccessibilitySettings = useCallback(async () => {
+    if (!isTauriEnvironment()) {
+      console.warn('Settings opening not available in browser environment');
+      return;
+    }
+
+    try {
+      console.log('🔧 Opening accessibility settings...');
+      await invoke('open_accessibility_settings');
+      console.log('✅ Accessibility settings opened');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Failed to open accessibility settings:', errorMessage);
+      setError(errorMessage);
     }
   }, []);
 
-  const resetPermission = useCallback(() => {
-    localStorage.removeItem('hotkey-permission');
-    setState({
-      status: 'unknown',
-      showPermissionRequest: false,
-      error: null
-    });
-  }, []);
+  const refreshStatus = useCallback(async () => {
+    await checkPermissions();
+  }, [checkPermissions]);
 
-  const dismissPermissionRequest = useCallback(() => {
-    setState(prev => ({ ...prev, showPermissionRequest: false }));
-  }, []);
+  // Check permissions on mount
+  useEffect(() => {
+    checkPermissions();
+  }, [checkPermissions]);
 
   return {
-    // State
-    permissionStatus: state.status,
-    showPermissionRequest: state.showPermissionRequest,
-    error: state.error,
-    isRequesting: state.status === 'requesting',
-    hasPermission: state.status === 'granted',
-    
-    // Actions
-    requestPermission,
-    grantPermission,
-    denyPermission,
-    revokePermission,
-    resetPermission,
-    dismissPermissionRequest
+    permissionStatus,
+    isLoading,
+    error,
+    checkPermissions,
+    requestPermissions,
+    registerShortcut,
+    openAccessibilitySettings,
+    refreshStatus,
   };
 };

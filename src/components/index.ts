@@ -9,9 +9,11 @@ export { default as Footer } from './Footer';
 export { default as NotificationBanner } from './NotificationBanner';
 export { default as TextProcessingResults } from './TextProcessingResults';
 export { default as StatusSection } from './StatusSection';
-export { JwtTokenInput } from './JwtTokenInput';
-export { JwtTokenManager } from './JwtTokenManager';
+
 export { default as ManualRephraseSection } from './ManualRephraseSection';
-export { HotkeyPermissionRequest } from './HotkeyPermissionRequest';
+
+export { AuthManager } from './AuthManager';
+export { default as DeepLinkTester } from './DeepLinkTester';
+export { HotkeyPermissionManager } from './HotkeyPermissionManager';
 
 
