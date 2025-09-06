@@ -62,10 +62,10 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "copyright": "",
+    "copyright": "Copyright © 2024 Suhail Malik. All rights reserved.",
     "category": "DeveloperTool",
-    "shortDescription": "",
-    "longDescription": "",
+    "shortDescription": "Professional Text Cleanup Tool",
+    "longDescription": "Clipify is a powerful desktop application that helps you clean up and rephrase text with AI assistance using global hotkeys.",
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15",
@@ -77,7 +77,20 @@
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": ""
+      "timestampUrl": "",
+      "wix": {
+        "language": "en-US",
+        "template": "main.wxs",
+        "fragmentPaths": [],
+        "componentGroupRefs": [],
+        "componentRefs": [],
+        "featureGroupRefs": [],
+        "featureRefs": [],
+        "mergeRefs": [],
+        "enableElevatedUpdateTask": false,
+        "bannerPath": null,
+        "dialogImagePath": null
+      }
     }
   }
 }

@@ -1,5 +1,7 @@
-use tauri::AppHandle;
+use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use std::process::Command;
+use tauri::{AppHandle, Manager};
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 pub fn get_macos_version() -> Result<String, String> {
@@ -160,6 +162,118 @@ pub fn check_accessibility_permissions() -> Result<String, String> {
     #[cfg(not(target_os = "macos"))]
     {
         Ok("Permission check not implemented for this platform".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn simulate_cmd_c() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Run enigo in a synchronous context on the main thread
+        // Use std::thread::spawn to avoid async runtime issues
+        let (tx, rx) = std::sync::mpsc::channel();
+        
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                // Create enigo instance - this must be done in the thread
+                let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
+                    format!("Failed to create Enigo instance: {}", e)
+                })?;
+                
+                // Small delay to ensure proper initialization
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                
+                // Simulate Cmd+C with proper key sequence
+                enigo.key(Key::Meta, Direction::Press).map_err(|e| {
+                    format!("Failed to press Cmd key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Unicode('c'), Direction::Press).map_err(|e| {
+                    format!("Failed to press C key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Unicode('c'), Direction::Release).map_err(|e| {
+                    format!("Failed to release C key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Meta, Direction::Release).map_err(|e| {
+                    format!("Failed to release Cmd key: {}", e)
+                })?;
+                
+                Ok("Cmd+C simulated successfully".to_string())
+            })();
+            
+            let _ = tx.send(result);
+        });
+        
+        // Wait for the result
+        match rx.recv() {
+            Ok(result) => result,
+            Err(_) => Err("Failed to receive result from enigo thread".to_string()),
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Run enigo in a synchronous context on a separate thread
+        // to avoid potential thread safety issues
+        let (tx, rx) = std::sync::mpsc::channel();
+        
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                // Create enigo instance - this must be done in the thread
+                let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
+                    format!("Failed to create Enigo instance: {}", e)
+                })?;
+                
+                // Small delay to ensure proper initialization
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                
+                // On Windows, use Ctrl+C instead of Cmd+C
+                enigo.key(Key::Control, Direction::Press).map_err(|e| {
+                    format!("Failed to press Ctrl key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Unicode('c'), Direction::Press).map_err(|e| {
+                    format!("Failed to press C key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Unicode('c'), Direction::Release).map_err(|e| {
+                    format!("Failed to release C key: {}", e)
+                })?;
+                
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                
+                enigo.key(Key::Control, Direction::Release).map_err(|e| {
+                    format!("Failed to release Ctrl key: {}", e)
+                })?;
+                
+                Ok("Ctrl+C simulated successfully".to_string())
+            })();
+            
+            let _ = tx.send(result);
+        });
+        
+        // Wait for the result
+        match rx.recv() {
+            Ok(result) => result,
+            Err(_) => Err("Failed to receive result from enigo thread".to_string()),
+        }
+    }
+    
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        Err("Copy simulation is only supported on macOS and Windows".to_string())
     }
 }
 

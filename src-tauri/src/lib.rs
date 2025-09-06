@@ -124,10 +124,18 @@ impl DeepLinkEventStore {
 pub type DeepLinkEventStoreState = Arc<DeepLinkEventStore>;
 
 // Import functions from modules
+use clipboard_commands::{
+    get_clipboard_history, clear_clipboard_history, paste_from_history, 
+    trigger_clipboard_copy, rephrase_text, setup_global_shortcut,
+    add_to_clipboard_history, remove_from_clipboard_history, 
+    search_clipboard_history, get_clipboard_entry_by_id, copy_selected_text_to_clipboard
+};
+use system::{
+    check_accessibility_permissions, get_macos_version, get_accessibility_instructions, 
+    quit_application, simulate_cmd_c
+};
+use window::{show_main_window, hide_main_window, toggle_window_visibility};
 use clipboard::load_history_from_file;
-use clipboard_commands::*;
-use window::*;
-use system::{check_accessibility_permissions, quit_application, get_macos_version, get_accessibility_instructions};
 
 // Deep link plugin is initialized via tauri_plugin_deep_link::init() in the builder
 
@@ -351,55 +359,6 @@ async fn clear_deep_link_events(
     Ok(())
 }
 
-#[tauri::command]
-async fn register_global_shortcut(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
-    
-    println!("🔐 Starting global shortcut registration process...");
-    
-    // First verify accessibility permissions before attempting registration
-    #[cfg(target_os = "macos")]
-    {
-        match system::check_accessibility_permissions() {
-            Ok(msg) => {
-                println!("✅ Accessibility permissions verified: {}", msg);
-            }
-            Err(err) => {
-                println!("❌ Accessibility permissions check failed: {}", err);
-                return Err(format!("Cannot register global shortcut: {}", err));
-            }
-        }
-    }
-    
-    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
-    
-    // Check if shortcut is already registered
-    if app.global_shortcut().is_registered(shortcut) {
-        println!("ℹ️ Global shortcut Cmd+Shift+C is already registered");
-        return Ok(());
-    }
-    
-    // Attempt to register the shortcut
-    match app.global_shortcut().register(shortcut) {
-        Ok(_) => {
-            println!("✅ Global shortcut Cmd+Shift+C registered successfully!");
-            Ok(())
-        }
-        Err(e) => {
-            let error_msg = format!("Failed to register global shortcut: {}", e);
-            println!("❌ {}", error_msg);
-            
-            // Provide more specific error messages based on the error type
-            if error_msg.contains("permission") || error_msg.contains("accessibility") {
-                Err("Global shortcut registration failed due to missing accessibility permissions. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility (macOS 13+) or System Preferences > Security & Privacy > Privacy > Accessibility (macOS 12 and earlier) and restart the app.".to_string())
-            } else if error_msg.contains("already registered") || error_msg.contains("in use") {
-                Err("The shortcut Cmd+Shift+C is already in use by another application. Please close other apps that might be using this shortcut and try again.".to_string())
-            } else {
-                Err(format!("Failed to register global shortcut Cmd+Shift+C: {}. Please ensure you have accessibility permissions enabled and restart the app.", e))
-            }
-        }
-    }
-}
 
 #[tauri::command]
 async fn open_accessibility_settings(app: tauri::AppHandle) -> Result<(), String> {
@@ -462,29 +421,6 @@ async fn open_accessibility_settings(app: tauri::AppHandle) -> Result<(), String
     }
 }
 
-#[tauri::command]
-async fn unregister_global_shortcut(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
-    
-    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
-    
-    app.global_shortcut().unregister(shortcut)
-        .map_err(|e| format!("Failed to unregister global shortcut: {}", e))?;
-    
-    println!("Global shortcut Cmd+Shift+C unregistered successfully!");
-    Ok(())
-}
-
-#[tauri::command]
-async fn check_global_shortcut_registered(app: tauri::AppHandle) -> Result<bool, String> {
-    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
-    
-    let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyC);
-    
-    let is_registered = app.global_shortcut().is_registered(shortcut);
-    
-    Ok(is_registered)
-}
 
 #[tauri::command]
 async fn check_accessibility_permissions_and_shortcut_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
@@ -859,6 +795,7 @@ pub fn run() {
              
              // System commands
              check_accessibility_permissions,
+             simulate_cmd_c,
              
              // Hotkey permission commands
              check_accessibility_permissions_and_shortcut_status,

@@ -118,18 +118,51 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
       console.log('⌨️ Registering global shortcut using Tauri v2 API...');
       
       // Use Tauri v2 frontend API instead of backend commands
-      const { register } = await import('@tauri-apps/plugin-global-shortcut');
-      
-      await register('CommandOrControl+Shift+C', (event) => {
-        console.log('Global shortcut triggered:', event);
-        if (event.state === 'Pressed') {
-          // Trigger the clipboard copy and clean functionality
-          // Use the proper command that handles the state internally
-          invoke('trigger_clipboard_copy').catch(err => {
-            console.error('Failed to copy selected text:', err);
-          });
+      const { register, isRegistered, unregister } = await import('@tauri-apps/plugin-global-shortcut');
+
+      const shortcut = 'CommandOrControl+Shift+C';
+
+      // If already registered (by us or another instance), try to unregister first
+      try {
+        const already = await isRegistered(shortcut);
+        if (already) {
+          console.log(`Shortcut ${shortcut} already registered. Attempting to unregister before re-registering...`);
+          await unregister(shortcut);
         }
-      });
+      } catch (preErr) {
+        console.warn('Could not check/unregister existing shortcut before registering:', preErr);
+      }
+
+      const doRegister = async () => {
+        await register(shortcut, (event) => {
+          console.log('Global shortcut triggered:', event);
+          if (event.state === 'Pressed') {
+            // Trigger the clipboard copy and clean functionality
+            // Use the proper command that handles the state internally
+            invoke('trigger_clipboard_copy').catch(err => {
+              console.error('Failed to copy selected text:', err);
+            });
+          }
+        });
+      };
+
+      try {
+        await doRegister();
+      } catch (regErr) {
+        const msg = regErr instanceof Error ? regErr.message : String(regErr);
+        // If registration failed due to previous binding, force unregister and retry once
+        if (msg.includes('RegisterEventHotKey failed')) {
+          console.warn('RegisterEventHotKey failed. Attempting to unregister existing binding and retry once...');
+          try {
+            await unregister(shortcut);
+          } catch (unregErr) {
+            console.warn('Unregister on failure also failed (may not be previously registered by us):', unregErr);
+          }
+          await doRegister();
+        } else {
+          throw regErr;
+        }
+      }
       
       console.log('✅ Global shortcut registered successfully using Tauri v2 API');
       

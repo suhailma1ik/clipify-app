@@ -38,13 +38,19 @@ export const setupGlobalShortcut = async (): Promise<void> => {
   
   try {
     // Use Tauri v2 frontend API
-    const { isRegistered, register } = await import('@tauri-apps/plugin-global-shortcut');
-    
-    // First check if shortcut is already registered
-    const alreadyRegistered = await isRegistered('CommandOrControl+Shift+C');
-    if (alreadyRegistered) {
-      console.log('Global shortcut already registered');
-      return;
+    const { isRegistered, register, unregister } = await import('@tauri-apps/plugin-global-shortcut');
+
+    const shortcut = 'CommandOrControl+Shift+C';
+
+    // First check if shortcut is already registered and try to clean it up
+    try {
+      const alreadyRegistered = await isRegistered(shortcut);
+      if (alreadyRegistered) {
+        console.log(`Global shortcut ${shortcut} already registered. Unregistering before re-registering...`);
+        await unregister(shortcut);
+      }
+    } catch (preErr) {
+      console.warn('Could not check/unregister existing shortcut before registering:', preErr);
     }
 
     // Check accessibility permissions first
@@ -55,16 +61,36 @@ export const setupGlobalShortcut = async (): Promise<void> => {
       throw new Error('Accessibility permissions required. Please grant permissions through the UI.');
     }
 
-    // Register the global shortcut using Tauri v2 API
-    await register('CommandOrControl+Shift+C', (event) => {
-      console.log('Global shortcut triggered:', event);
-      if (event.state === 'Pressed') {
-        // Trigger the clipboard copy and clean functionality
-        invoke('trigger_clipboard_copy').catch(err => {
-          console.error('Failed to copy selected text:', err);
-        });
+    // Helper to perform registration
+    const doRegister = async () => {
+      await register(shortcut, (event) => {
+        console.log('Global shortcut triggered:', event);
+        if (event.state === 'Pressed') {
+          // Trigger the clipboard copy and clean functionality
+          invoke('trigger_clipboard_copy').catch(err => {
+            console.error('Failed to copy selected text:', err);
+          });
+        }
+      });
+    };
+
+    // Register the global shortcut using Tauri v2 API with retry on conflict
+    try {
+      await doRegister();
+    } catch (regErr) {
+      const msg = regErr instanceof Error ? regErr.message : String(regErr);
+      if (msg.includes('RegisterEventHotKey failed')) {
+        console.warn('RegisterEventHotKey failed. Attempting to unregister existing binding and retry once...');
+        try {
+          await unregister(shortcut);
+        } catch (unregErr) {
+          console.warn('Unregister on failure also failed (may not be previously registered by us):', unregErr);
+        }
+        await doRegister();
+      } else {
+        throw regErr;
       }
-    });
+    }
     
     console.log('Global shortcut registered successfully using Tauri v2 API');
   } catch (error) {

@@ -2,9 +2,6 @@ use crate::clipboard::{save_history_to_file, ClipboardEntry, ClipboardHistorySta
 use crate::config::RephraseResponse;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 
 // Clipboard History Commands
 #[tauri::command]
@@ -191,89 +188,31 @@ pub async fn copy_selected_text_to_clipboard(
 ) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
         use std::time::Duration;
         use tokio::time::sleep;
 
         // Store the current clipboard content to detect changes
         let _original_clipboard = app.clipboard().read_text().unwrap_or_default();
 
-        // First, try to detect if there's actually selected text using AppleScript
-        let _selection_check = Command::new("osascript")
-            .arg("-e")
-            .arg(r#"
-                try
-                    tell application "System Events"
-                        set frontApp to name of first application process whose frontmost is true
-                        tell process frontApp
-                            set selectedText to ""
-                            try
-                                -- Try to get selected text directly (works in some apps)
-                                set selectedText to value of attribute "AXSelectedText" of focused UI element
-                            on error
-                                -- Fallback: simulate copy and check if clipboard changes
-                                set selectedText to "unknown"
-                            end try
-                            return selectedText
-                        end tell
-                    end tell
-                on error errMsg
-                    return "error: " & errMsg
-                end try
-            "#)
-            .output();
+        // Use the new Rust-based Cmd+C simulation
+        let simulate_result = crate::system::simulate_cmd_c().await;
 
-        // Simulate Cmd+C to copy selected text
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg("tell application \"System Events\" to keystroke \"c\" using {command down}")
-            .output();
-
-        match output {
-            Ok(result) => {
-                if !result.status.success() {
-                    let stderr_output = String::from_utf8_lossy(&result.stderr);
-                    let error_msg = format!("Failed to simulate Cmd+C: {}", stderr_output);
-
-                    // Check if it's a permission error
-                    if stderr_output.contains("osascript is not allowed to send keystrokes") {
-                        if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app)
-                            .builder()
-                            .title("🔒 Permission Required")
-                            .body("Please grant Accessibility permissions in System Settings > Privacy & Security > Accessibility (macOS 13+) or System Preferences > Security & Privacy > Privacy > Accessibility (macOS 12 and earlier)")
-                            .show()
-                        {
-                            eprintln!("Failed to show permission error notification: {}", e);
-                        }
-                    } else {
-                        if let Err(e) =
-                            tauri_plugin_notification::NotificationExt::notification(&app)
-                                .builder()
-                                .title("⚠️ Copy Failed")
-                                .body(
-                                    "Unable to copy selected text. Please select some text first.",
-                                )
-                                .show()
-                        {
-                            eprintln!("Failed to show copy error notification: {}", e);
-                        }
-                    }
-
-                    return Err(error_msg);
-                }
+        match simulate_result {
+            Ok(_) => {
+                // Cmd+C simulation successful, continue with clipboard reading
             }
             Err(e) => {
-                let error_msg = format!("Failed to execute copy command: {}", e);
+                let error_msg = format!("Failed to simulate Cmd+C: {}", e);
 
-                // Show notification about command failure
+                // Show notification about copy failure
                 if let Err(notif_err) =
                     tauri_plugin_notification::NotificationExt::notification(&app)
                         .builder()
-                        .title("System Error")
-                        .body("Unable to execute copy command. Please check system permissions.")
+                        .title("⚠️ Copy Failed")
+                        .body("Unable to copy selected text. Please ensure accessibility permissions are granted and some text is selected.")
                         .show()
                 {
-                    eprintln!("Failed to show system error notification: {}", notif_err);
+                    eprintln!("Failed to show copy error notification: {}", notif_err);
                 }
 
                 return Err(error_msg);
@@ -406,10 +345,169 @@ pub async fn copy_selected_text_to_clipboard(
         Ok(cleaned_text)
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        use std::time::Duration;
+        use tokio::time::sleep;
+
+        // Store the current clipboard content to detect changes
+        let _original_clipboard = app.clipboard().read_text().unwrap_or_default();
+
+        // Use the Windows-specific Ctrl+C simulation
+        let simulate_result = crate::system::simulate_cmd_c().await;
+
+        match simulate_result {
+            Ok(_) => {
+                // Ctrl+C simulation successful, continue with clipboard reading
+            }
+            Err(e) => {
+                let error_msg = format!("Failed to simulate Ctrl+C: {}", e);
+
+                // Show notification about copy failure
+                if let Err(notif_err) =
+                    tauri_plugin_notification::NotificationExt::notification(&app)
+                        .builder()
+                        .title("⚠️ Copy Failed")
+                        .body("Unable to copy selected text. Please ensure some text is selected.")
+                        .show()
+                {
+                    eprintln!("Failed to show copy error notification: {}", notif_err);
+                }
+
+                return Err(error_msg);
+            }
+        }
+
+        // Wait and retry reading clipboard with exponential backoff
+        let mut new_clipboard = String::new();
+        let mut attempts = 0;
+        let max_attempts = 3;
+
+        while attempts < max_attempts {
+            sleep(Duration::from_millis(100 * (attempts + 1))).await;
+
+            match app.clipboard().read_text() {
+                Ok(content) => {
+                    new_clipboard = content;
+                    break;
+                }
+                Err(e) if attempts == max_attempts - 1 => {
+                    let error_msg = format!("Failed to read clipboard after copy: {}", e);
+
+                    // Show notification about clipboard read failure
+                    if let Err(notif_err) =
+                        tauri_plugin_notification::NotificationExt::notification(&app)
+                            .builder()
+                            .title("Clipboard Error")
+                            .body("Unable to read clipboard content after copy. Please try again.")
+                            .show()
+                    {
+                        eprintln!("Failed to show clipboard error notification: {}", notif_err);
+                    }
+
+                    return Err(error_msg);
+                }
+                Err(_) => {
+                    attempts += 1;
+                    continue;
+                }
+            }
+        }
+
+        // Check if clipboard has meaningful content
+        if new_clipboard.trim().is_empty() {
+            let error_msg =
+                "No text was copied. Please select some text first, then use Ctrl+Shift+C."
+                    .to_string();
+
+            // Show notification with instructions
+            if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app)
+                .builder()
+                .title("📝 Select Text First")
+                .body("Please select some text, then use Ctrl+Shift+C to copy and clean it.")
+                .show()
+            {
+                eprintln!("Failed to show instruction notification: {}", e);
+            }
+
+            return Err(error_msg);
+        }
+
+        // Additional validation: check if we got reasonable text content
+        if new_clipboard.len() < 1 {
+            let error_msg =
+                "Copied text is too short. Please select meaningful text content.".to_string();
+
+            if let Err(e) = tauri_plugin_notification::NotificationExt::notification(&app)
+                .builder()
+                .title("📝 Select More Text")
+                .body("Please select more meaningful text content to clean.")
+                .show()
+            {
+                eprintln!("Failed to show short text notification: {}", e);
+            }
+
+            return Err(error_msg);
+        }
+
+        println!(
+            "Successfully copied selected text, length: {}",
+            new_clipboard.len()
+        );
+
+        // Use the newly copied text
+        let new_text = new_clipboard;
+
+        // Clean the text according to Clipify specifications
+        let cleaned_text = cleanup_text(&new_text);
+
+        // Check if cleaned text is empty and return early if so
+        if cleaned_text.is_empty() {
+            // Emit an event to notify the frontend about empty text
+            if let Err(e) = app.emit("clipboard-updated", "") {
+                println!(
+                    "Failed to emit clipboard update event for empty text: {}",
+                    e
+                );
+            }
+            return Ok("".to_string());
+        }
+
+        // Write cleaned text back to clipboard
+        if let Err(e) = app.clipboard().write_text(&cleaned_text) {
+            return Err(format!("Failed to write cleaned text to clipboard: {}", e));
+        }
+
+        // Add to clipboard history
+        let original_entry = ClipboardEntry::new(new_text.clone(), false, None);
+        let cleaned_entry = ClipboardEntry::new(cleaned_text.clone(), true, Some(new_text.clone()));
+
+        {
+            let mut history = history_state.write().await;
+            // Add both original and cleaned entries to history
+            history.add_entry(cleaned_entry);
+            if new_text != cleaned_text {
+                history.add_entry(original_entry);
+            }
+
+            // Save to file
+            if let Err(e) = save_history_to_file(&*history) {
+                eprintln!("Failed to save clipboard history: {}", e);
+            }
+        }
+
+        // Emit an event to notify the frontend
+        if let Err(e) = app.emit("clipboard-updated", &cleaned_text) {
+            println!("Failed to emit clipboard update event: {}", e);
+        }
+
+        Ok(cleaned_text)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         // For other platforms, we'll need to implement platform-specific solutions
         // For now, just return an error
-        Err("Global shortcut copy is currently only supported on macOS".to_string())
+        Err("Global shortcut copy is currently only supported on macOS and Windows".to_string())
     }
 }
