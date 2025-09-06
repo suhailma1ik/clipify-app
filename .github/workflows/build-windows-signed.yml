@@ -39,9 +39,49 @@ jobs:
           
       - name: Install WiX Toolset
         run: |
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip" -OutFile "wix311-binaries.zip"
-          Expand-Archive -Path "wix311-binaries.zip" -DestinationPath "C:\wix"
-          echo "C:\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Try chocolatey first (most reliable)
+          try {
+            Write-Host "Installing WiX via Chocolatey..."
+            choco install wixtoolset -y --version=3.11.2
+            $wixDir = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+            if (Test-Path $wixDir) {
+              echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              Write-Host "WiX installed via Chocolatey successfully"
+              exit 0
+            }
+          } catch {
+            Write-Host "Chocolatey installation failed, trying manual download..."
+          }
+          
+          # Fallback to manual download
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
+          $wixZip = "$env:TEMP\wix311-binaries.zip"
+          $wixDir = "C:\wix311"
+          
+          Write-Host "Downloading WiX Toolset..."
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixZip -UseBasicParsing
+          
+          Write-Host "Extracting WiX Toolset..."
+          New-Item -ItemType Directory -Path $wixDir -Force
+          Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
+          
+          Write-Host "Adding WiX to PATH..."
+          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          Write-Host "Setting WiX environment variables..."
+          echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "WIX_TOOLSET_PATH=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          
+          Write-Host "Verifying WiX installation..."
+          if (Test-Path "$wixDir\candle.exe") {
+            & "$wixDir\candle.exe" -? | Select-Object -First 3
+            & "$wixDir\light.exe" -? | Select-Object -First 3
+            Write-Host "WiX installation verified successfully"
+          } else {
+            Write-Error "WiX installation failed - candle.exe not found"
+            exit 1
+          }
           
       - name: Setup code signing certificate
         if: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -63,6 +103,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_PRIVATE_KEY: ${{ env.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ env.TAURI_KEY_PASSWORD }}
+          WIX: C:\wix311
+          WIX_TOOLSET_PATH: C:\wix311
+          PATH: C:\wix311;${{ env.PATH }}
         with:
           tagName: ${{ github.event.inputs.version }}
           releaseName: "Clipify ${{ github.event.inputs.version }}"
@@ -93,6 +136,7 @@ jobs:
           prerelease: false
           includeDebug: false
           includeRelease: true
+          args: --bundles msi
           
       - name: Upload signed MSI artifact
         uses: actions/upload-artifact@v4
