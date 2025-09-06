@@ -34,7 +34,7 @@ export class AuthErrorHandler {
         try {
             this.isHandlingAuthError = true;
 
-            const errorMessage = error.message.toLowerCase();
+            const errorMessage = error.message?.toLowerCase() || '';
 
             // Check if this is an authentication-related error
             if (
@@ -43,7 +43,7 @@ export class AuthErrorHandler {
                 errorMessage.includes('invalid or expired token') ||
                 errorMessage.includes('token refresh failed')
             ) {
-                console.warn(`[AuthErrorHandler] Authentication error detected in ${context}:`, error.message);
+                console.warn(`[AuthErrorHandler] Authentication error detected in ${context}:`, error.message || 'No error message');
                 getLoggingService().warn('auth', `Authentication error in ${context}`, error);
 
                 // Trigger logout to clear all tokens and redirect to login
@@ -66,7 +66,7 @@ export class AuthErrorHandler {
      * @returns True if the error is authentication-related
      */
     public isAuthError(error: Error): boolean {
-        const errorMessage = error.message.toLowerCase();
+        const errorMessage = error.message?.toLowerCase() || '';
         return (
             errorMessage.includes('authentication_required') ||
             errorMessage.includes('unauthorized') ||

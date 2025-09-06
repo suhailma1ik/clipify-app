@@ -1,7 +1,6 @@
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use rdev::{simulate, EventType, Key};
 use std::process::Command;
-use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::ShellExt;
+use tauri::AppHandle;
 
 #[tauri::command]
 pub fn get_macos_version() -> Result<String, String> {
@@ -169,41 +168,36 @@ pub fn check_accessibility_permissions() -> Result<String, String> {
 pub async fn simulate_cmd_c() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        // Run enigo in a synchronous context on the main thread
-        // Use std::thread::spawn to avoid async runtime issues
+        // Run rdev simulation in a synchronous context on a separate thread
+        // to avoid async runtime issues
         let (tx, rx) = std::sync::mpsc::channel();
         
         std::thread::spawn(move || {
             let result = (|| -> Result<String, String> {
-                // Create enigo instance - this must be done in the thread
-                let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
-                    format!("Failed to create Enigo instance: {}", e)
-                })?;
-                
-                // Small delay to ensure proper initialization
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 
-                // Simulate Cmd+C with proper key sequence
-                enigo.key(Key::Meta, Direction::Press).map_err(|e| {
-                    format!("Failed to press Cmd key: {}", e)
+                simulate(&EventType::KeyPress(Key::MetaLeft)).map_err(|e| {
+                    format!("Failed to press Cmd key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Unicode('c'), Direction::Press).map_err(|e| {
-                    format!("Failed to press C key: {}", e)
+                simulate(&EventType::KeyPress(Key::KeyC)).map_err(|e| {
+                    format!("Failed to press C key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Unicode('c'), Direction::Release).map_err(|e| {
-                    format!("Failed to release C key: {}", e)
+                // Release C key
+                simulate(&EventType::KeyRelease(Key::KeyC)).map_err(|e| {
+                    format!("Failed to release C key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Meta, Direction::Release).map_err(|e| {
-                    format!("Failed to release Cmd key: {}", e)
+                // Release Cmd key
+                simulate(&EventType::KeyRelease(Key::MetaLeft)).map_err(|e| {
+                    format!("Failed to release Cmd key: {:?}", e)
                 })?;
                 
                 Ok("Cmd+C simulated successfully".to_string())
@@ -215,47 +209,46 @@ pub async fn simulate_cmd_c() -> Result<String, String> {
         // Wait for the result
         match rx.recv() {
             Ok(result) => result,
-            Err(_) => Err("Failed to receive result from enigo thread".to_string()),
+            Err(_) => Err("Failed to receive result from rdev thread".to_string()),
         }
     }
     
     #[cfg(target_os = "windows")]
     {
-        // Run enigo in a synchronous context on a separate thread
+        // Run rdev simulation in a synchronous context on a separate thread
         // to avoid potential thread safety issues
         let (tx, rx) = std::sync::mpsc::channel();
         
         std::thread::spawn(move || {
             let result = (|| -> Result<String, String> {
-                // Create enigo instance - this must be done in the thread
-                let mut enigo = Enigo::new(&Settings::default()).map_err(|e| {
-                    format!("Failed to create Enigo instance: {}", e)
-                })?;
-                
                 // Small delay to ensure proper initialization
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 
                 // On Windows, use Ctrl+C instead of Cmd+C
-                enigo.key(Key::Control, Direction::Press).map_err(|e| {
-                    format!("Failed to press Ctrl key: {}", e)
+                // Press Ctrl key
+                simulate(&EventType::KeyPress(Key::ControlLeft)).map_err(|e| {
+                    format!("Failed to press Ctrl key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Unicode('c'), Direction::Press).map_err(|e| {
-                    format!("Failed to press C key: {}", e)
+                // Press C key
+                simulate(&EventType::KeyPress(Key::KeyC)).map_err(|e| {
+                    format!("Failed to press C key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Unicode('c'), Direction::Release).map_err(|e| {
-                    format!("Failed to release C key: {}", e)
+                // Release C key
+                simulate(&EventType::KeyRelease(Key::KeyC)).map_err(|e| {
+                    format!("Failed to release C key: {:?}", e)
                 })?;
                 
                 std::thread::sleep(std::time::Duration::from_millis(20));
                 
-                enigo.key(Key::Control, Direction::Release).map_err(|e| {
-                    format!("Failed to release Ctrl key: {}", e)
+                // Release Ctrl key
+                simulate(&EventType::KeyRelease(Key::ControlLeft)).map_err(|e| {
+                    format!("Failed to release Ctrl key: {:?}", e)
                 })?;
                 
                 Ok("Ctrl+C simulated successfully".to_string())
@@ -267,7 +260,7 @@ pub async fn simulate_cmd_c() -> Result<String, String> {
         // Wait for the result
         match rx.recv() {
             Ok(result) => result,
-            Err(_) => Err("Failed to receive result from enigo thread".to_string()),
+            Err(_) => Err("Failed to receive result from rdev thread".to_string()),
         }
     }
     

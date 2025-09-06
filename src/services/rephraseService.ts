@@ -158,42 +158,44 @@ export class RephraseService {
 
       // Handle API client errors
       if (error instanceof Error) {
-        if (error.message.includes('JWT token is required')) {
+        const errorMessage = error.message || '';
+        
+        if (errorMessage.includes('JWT token is required')) {
           throw new RephraseError({
             message: 'JWT token is required for rephrasing',
             code: 'UNAUTHORIZED'
           });
         }
 
-        if (error.message.includes('HTTP 401')) {
+        if (errorMessage.includes('HTTP 401')) {
           throw new RephraseError({
             message: 'Unauthorized request - invalid or expired token',
             code: 'UNAUTHORIZED'
           });
         }
 
-        if (error.message.includes('HTTP 403')) {
+        if (errorMessage.includes('HTTP 403')) {
           throw new RephraseError({
             message: 'Access denied',
             code: 'FORBIDDEN'
           });
         }
 
-        if (error.message.includes('HTTP 429')) {
+        if (errorMessage.includes('HTTP 429')) {
           throw new RephraseError({
             message: 'Rate limit exceeded. Please try again later.',
             code: 'RATE_LIMITED'
           });
         }
 
-        if (error.message.includes('HTTP 5')) {
+        if (errorMessage.includes('HTTP 5')) {
           throw new RephraseError({
             message: 'Server error. Please try again later.',
             code: 'SERVER_ERROR'
           });
         }
 
-        if (error.message.includes('fetch') || error.message.includes('network')) {
+        if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
           throw new RephraseError({
             message: 'Network error. Please check your internet connection and try again.',
             code: 'NETWORK_ERROR',
