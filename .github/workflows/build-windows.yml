@@ -48,88 +48,65 @@ jobs:
           
       - name: Install WiX Toolset
         run: |
-          # Try chocolatey first (most reliable)
-          try {
-            Write-Host "Installing WiX via Chocolatey..."
-            choco install wixtoolset -y --version=3.11.2
-            $wixDir = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
-            if (Test-Path $wixDir) {
-              echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-              echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-              Write-Host "WiX installed via Chocolatey successfully"
-              exit 0
-            }
-          } catch {
-            Write-Host "Chocolatey installation failed, trying manual download..."
+          Write-Host "Installing WiX Toolset v3.11.2..."
+          
+          # Use official WiX installer for better reliability
+          $wixInstallerUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe"
+          $wixInstaller = "$env:TEMP\wix311.exe"
+          $wixDir = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+          
+          # Download WiX installer
+          Write-Host "Downloading WiX installer..."
+          Invoke-WebRequest -Uri $wixInstallerUrl -OutFile $wixInstaller -UseBasicParsing
+          
+          # Install WiX silently
+          Write-Host "Installing WiX Toolset..."
+          Start-Process -FilePath $wixInstaller -ArgumentList "/quiet" -Wait -NoNewWindow
+          
+          # Verify installation
+          if (Test-Path $wixDir) {
+            Write-Host "WiX installed successfully at: $wixDir"
+          } else {
+            # Fallback to manual binary download
+            Write-Host "Installer failed, trying manual binary download..."
+            $wixBinUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
+            $wixZip = "$env:TEMP\wix311-binaries.zip"
+            $wixDir = "C:\wix311"
+            
+            Invoke-WebRequest -Uri $wixBinUrl -OutFile $wixZip -UseBasicParsing
+            New-Item -ItemType Directory -Path $wixDir -Force
+            Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
           }
           
-          # Fallback to manual download with retry logic
-          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
-          $wixZip = "$env:TEMP\wix311-binaries.zip"
-          $wixDir = "C:\wix311"
-          $maxRetries = 3
-          $retryCount = 0
-          
-          do {
-            try {
-              $retryCount++
-              Write-Host "Downloading WiX Toolset (attempt $retryCount/$maxRetries)..."
-              
-              # Remove existing files if they exist
-              if (Test-Path $wixZip) { Remove-Item $wixZip -Force }
-              if (Test-Path $wixDir) { Remove-Item $wixDir -Recurse -Force }
-              
-              # Download with progress and timeout
-              $webClient = New-Object System.Net.WebClient
-              $webClient.DownloadFile($wixUrl, $wixZip)
-              
-              # Verify download
-              if (-not (Test-Path $wixZip) -or (Get-Item $wixZip).Length -eq 0) {
-                throw "Download failed or file is empty"
-              }
-              
-              Write-Host "Extracting WiX Toolset..."
-              New-Item -ItemType Directory -Path $wixDir -Force
-              Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
-              
-              # Verify extraction
-              if (-not (Test-Path "$wixDir\candle.exe") -or -not (Test-Path "$wixDir\light.exe")) {
-                throw "WiX extraction failed - required executables not found"
-              }
-              
-              Write-Host "WiX Toolset downloaded and extracted successfully"
-              break
-            } catch {
-              Write-Host "Attempt $retryCount failed: $($_.Exception.Message)"
-              if ($retryCount -ge $maxRetries) {
-                Write-Error "Failed to download WiX Toolset after $maxRetries attempts"
-                exit 1
-              }
-              Start-Sleep -Seconds 5
-            }
-          } while ($retryCount -lt $maxRetries)
-          
-          Write-Host "Adding WiX to PATH..."
-          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          
+          # Set environment variables
           Write-Host "Setting WiX environment variables..."
+          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "WIX_TOOLSET_PATH=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           
+          # Verify WiX tools
           Write-Host "Verifying WiX installation..."
           if (Test-Path "$wixDir\candle.exe" -and Test-Path "$wixDir\light.exe") {
-            & "$wixDir\candle.exe" -? | Select-Object -First 3
-            & "$wixDir\light.exe" -? | Select-Object -First 3
-            Write-Host "WiX installation verified successfully"
+            Write-Host "✅ WiX tools found:"
+            Write-Host "  - candle.exe: $(Test-Path "$wixDir\candle.exe")"
+            Write-Host "  - light.exe: $(Test-Path "$wixDir\light.exe")"
             
-            # List all files in WiX directory for debugging
-            Write-Host "WiX directory contents:"
-            Get-ChildItem $wixDir | ForEach-Object { Write-Host "  $($_.Name)" }
+            # Test WiX tools
+            try {
+              & "$wixDir\candle.exe" -? 2>$null | Select-Object -First 1
+              & "$wixDir\light.exe" -? 2>$null | Select-Object -First 1
+              Write-Host "✅ WiX tools are functional"
+            } catch {
+              Write-Warning "WiX tools installed but may have issues: $_"
+            }
           } else {
-            Write-Error "WiX installation failed - required executables not found"
+            Write-Error "❌ WiX installation failed - required tools not found"
+            Write-Host "Expected location: $wixDir"
+            Write-Host "Contents of directory:"
             if (Test-Path $wixDir) {
-              Write-Host "Directory contents:"
-              Get-ChildItem $wixDir -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+              Get-ChildItem $wixDir | Format-Table Name, Length
+            } else {
+              Write-Host "Directory does not exist"
             }
             exit 1
           }
@@ -153,47 +130,55 @@ jobs:
       - name: Build frontend
         run: npm run build:prod
         
-      - name: Verify WiX Environment Before Build
-        run: |
-          Write-Host "Verifying WiX environment before build..."
-          Write-Host "WIX: $env:WIX"
-          Write-Host "WIX_TOOLSET_PATH: $env:WIX_TOOLSET_PATH"
-          Write-Host "PATH contains WiX: $($env:PATH -like '*wix311*')"
-          
-          # Verify WiX executables are accessible
-          $wixDir = "C:\wix311"
-          if (Test-Path "$wixDir\candle.exe") {
-            Write-Host "✓ candle.exe found and accessible"
-            & "$wixDir\candle.exe" -? 2>&1 | Select-Object -First 2
-          } else {
-            Write-Error "✗ candle.exe not found at $wixDir\candle.exe"
-            exit 1
-          }
-          
-          if (Test-Path "$wixDir\light.exe") {
-            Write-Host "✓ light.exe found and accessible"
-            & "$wixDir\light.exe" -? 2>&1 | Select-Object -First 2
-          } else {
-            Write-Error "✗ light.exe not found at $wixDir\light.exe"
-            exit 1
-          }
-          
-          Write-Host "WiX environment verification completed successfully"
-          
       - name: Build Tauri MSI
-        uses: tauri-apps/tauri-action@v0
+        run: |
+          Write-Host "Starting Tauri MSI build..."
+          
+          # Ensure WiX is in PATH for this step
+          $wixPath = if (Test-Path "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin") {
+            "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+          } else {
+            "C:\wix311"
+          }
+          
+          $env:PATH = "$wixPath;$env:PATH"
+          $env:WIX = $wixPath
+          $env:WIX_TOOLSET_PATH = $wixPath
+          
+          Write-Host "WiX Path: $wixPath"
+          Write-Host "PATH: $env:PATH"
+          
+          # Verify WiX is accessible
+          Write-Host "Verifying WiX accessibility..."
+          try {
+            $candleVersion = & "$wixPath\candle.exe" -? 2>$null | Select-Object -First 1
+            Write-Host "✅ Candle.exe accessible: $candleVersion"
+          } catch {
+            Write-Error "❌ Cannot access candle.exe: $_"
+            exit 1
+          }
+          
+          # Build with Tauri CLI directly
+          Write-Host "Building MSI package..."
+          try {
+            npm run tauri:build -- --bundles msi --verbose
+            Write-Host "✅ MSI build completed successfully"
+          } catch {
+            Write-Error "❌ MSI build failed: $_"
+            Write-Host "Build logs:"
+            Get-Content "src-tauri/target/release/build.log" -ErrorAction SilentlyContinue
+            exit 1
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WIX: C:\wix311
-          WIX_TOOLSET_PATH: C:\wix311
-          PATH: C:\wix311;${{ env.PATH }}
-          # Additional environment variables for WiX
-          WIXUI_INSTALLDIR: C:\wix311
-          WIX_TEMP: ${{ runner.temp }}\wix
+          
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.release == 'true' || github.ref_type == 'tag' }}
+        uses: softprops/action-gh-release@v1
         with:
-          tagName: ${{ steps.version.outputs.version }}
-          releaseName: "Clipify ${{ steps.version.outputs.version }}"
-          releaseBody: |
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Clipify ${{ steps.version.outputs.version }}"
+          body: |
             ## Windows MSI Installer
             
             This release includes a Windows MSI installer for Clipify.
@@ -212,11 +197,12 @@ jobs:
             ### System Requirements
             - Windows 10 or later
             - Microsoft Edge WebView2 (automatically installed if missing)
-          releaseDraft: ${{ github.event.inputs.release != 'true' }}
+          draft: ${{ github.event.inputs.release != 'true' }}
           prerelease: ${{ contains(steps.version.outputs.version, 'dev') || contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
-          includeDebug: false
-          includeRelease: true
-          args: --bundles msi --config src-tauri/tauri.conf.json --verbose
+          files: |
+            src-tauri/target/release/bundle/msi/*.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Upload MSI artifact
         uses: actions/upload-artifact@v4
