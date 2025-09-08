@@ -86,7 +86,7 @@ jobs:
           
           # Verify WiX tools
           Write-Host "Verifying WiX installation..."
-          if (Test-Path "$wixDir\candle.exe" -and Test-Path "$wixDir\light.exe") {
+          if ((Test-Path "$wixDir\candle.exe") -and (Test-Path "$wixDir\light.exe")) {
             Write-Host "✅ WiX tools found:"
             Write-Host "  - candle.exe: $(Test-Path "$wixDir\candle.exe")"
             Write-Host "  - light.exe: $(Test-Path "$wixDir\light.exe")"
