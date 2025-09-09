@@ -22,6 +22,44 @@ pub fn get_macos_version() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn request_input_monitoring_permission() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Attempt a minimal input monitoring operation to trigger permission prompt
+        let (tx, rx) = std::sync::mpsc::channel();
+        
+        std::thread::spawn(move || {
+            let result = (|| -> Result<String, String> {
+                // Try to simulate a very brief key event to trigger permission request
+                // This will fail if permission is not granted, but will prompt the user
+                match simulate(&EventType::KeyPress(Key::F12)) {
+                    Ok(_) => {
+                        // Immediately release the key
+                        let _ = simulate(&EventType::KeyRelease(Key::F12));
+                        Ok("Input monitoring permission available".to_string())
+                    }
+                    Err(e) => {
+                        Err(format!("Input monitoring permission required: {:?}", e))
+                    }
+                }
+            })();
+            
+            let _ = tx.send(result);
+        });
+        
+        match rx.recv() {
+            Ok(result) => result,
+            Err(_) => Err("Failed to check input monitoring permission".to_string()),
+        }
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok("Input monitoring not required on this platform".to_string())
+    }
+}
+
+#[tauri::command]
 pub fn get_accessibility_instructions() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {

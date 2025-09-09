@@ -17,7 +17,8 @@
     "tauri:dev:prod": "tauri dev --config src-tauri/tauri.conf.json",
     "tauri:build": "tauri build --config src-tauri/tauri.conf.json",
     "tauri:build:dev": "tauri build --config src-tauri/tauri.dev.conf.json",
-    "tauri:build:prod": "tauri build --config src-tauri/tauri.conf.json"
+    "tauri:build:prod": "tauri build --config src-tauri/tauri.conf.json",
+    "build:windows:prod": "./scripts/build-windows-prod.sh"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

@@ -3,21 +3,34 @@ import react from "@vitejs/plugin-react";
 
 const host = process.env.TAURI_DEV_HOST;
 
-// Load environment variables based on NODE_ENV
-const getEnvConfig = () => {
-  const env = loadEnv(process.env.NODE_ENV || 'development', process.cwd(), '');
-  return {
-    port: parseInt(env.VITE_DEV_TAURI_PORT || env.VITE_PROD_TAURI_PORT || '1420'),
-    hmrPort: parseInt(env.VITE_DEV_TAURI_HMR_PORT || env.VITE_PROD_TAURI_HMR_PORT || '1421'),
-    baseUrl: env.VITE_DEV_BASE_URL || env.VITE_PROD_BASE_URL || 'http://localhost:1420',
-    logLevel: env.VITE_DEV_LOG_LEVEL || env.VITE_PROD_LOG_LEVEL || 'info'
-  };
-};
-
-const envConfig = getEnvConfig();
-
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => {
+  // Load environment variables based on Vite mode (development/production)
+  const env = loadEnv(mode, process.cwd(), '');
+  
+  // Determine environment configuration based on mode
+  const getEnvConfig = () => {
+    if (mode === 'production') {
+      return {
+        port: parseInt(env.VITE_PROD_TAURI_PORT || '1420'),
+        hmrPort: parseInt(env.VITE_PROD_TAURI_HMR_PORT || '1421'),
+        baseUrl: env.VITE_PROD_BASE_URL || 'https://clipify0.el.r.appspot.com/',
+        logLevel: env.VITE_PROD_LOG_LEVEL || 'info'
+      };
+    }
+    
+    // Development configuration
+    return {
+      port: parseInt(env.VITE_DEV_TAURI_PORT || '1420'),
+      hmrPort: parseInt(env.VITE_DEV_TAURI_HMR_PORT || '1421'),
+      baseUrl: env.VITE_DEV_BASE_URL || 'http://localhost:1420',
+      logLevel: env.VITE_DEV_LOG_LEVEL || 'debug'
+    };
+  };
+
+  const envConfig = getEnvConfig();
+  
+  return ({
   plugins: [react()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -47,4 +60,5 @@ export default defineConfig(async () => ({
   
   // Base URL configuration - use relative path for Tauri builds
   base: './',
-}));
+  });
+});

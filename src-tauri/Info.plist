@@ -13,5 +13,12 @@
             </array>
         </dict>
     </array>
+    
+    <!-- Usage descriptions for privacy permissions -->
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Clipify needs input monitoring access to simulate Cmd+C for copying selected text when using the global hotkey.</string>
+    
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Clipify needs Apple Events access to interact with other applications for text copying functionality.</string>
 </dict>
 </plist>

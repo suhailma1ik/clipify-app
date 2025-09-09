@@ -10,6 +10,9 @@ mod window;
 mod clipboard_commands;
 mod system;
 
+// Import system functions
+use system::request_input_monitoring_permission;
+
 // Re-export types for external use
 pub use config::{EnvironmentConfig, RephraseRequest, RephraseResponse};
 pub use clipboard::{ClipboardEntry, ClipboardHistory, ClipboardHistoryState};
@@ -802,6 +805,7 @@ pub fn run() {
              open_accessibility_settings,
              get_macos_version,
              get_accessibility_instructions,
+             request_input_monitoring_permission,
              
              // Deep link commands
              verify_deep_link_protocols,

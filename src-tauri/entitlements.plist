@@ -2,9 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Allow the app to use accessibility features -->
+    <!-- Allow the app to use accessibility features and UI automation -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    
+    <!-- Allow input monitoring for keyboard event simulation -->
+    <key>com.apple.security.device.input-monitoring</key>
+    <true/>
+    
+    <!-- Allow accessibility API access for reading UI elements and text selection -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.apple.accessibility.api</string>
+    </array>
     
     <!-- Allow sending Apple Events to System Events -->
     <key>com.apple.security.temporary-exception.apple-events</key>

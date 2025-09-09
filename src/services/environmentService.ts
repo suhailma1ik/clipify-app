@@ -7,7 +7,21 @@ import { Environment, EnvironmentConfig, ApiConfig, OAuthConfig } from '../types
 export const detectEnvironment = (): Environment => {
   console.log('[EnvironmentService] Detecting environment with improved logic');
   
-  // Priority 1: Explicit VITE_ENVIRONMENT (most reliable)
+  // Priority 1: Vite MODE (most reliable for build-time detection)
+  const mode = import.meta.env.MODE;
+  console.log('[EnvironmentService] Vite MODE:', mode);
+  
+  if (mode === 'production') {
+    console.log('[EnvironmentService] Environment detected from Vite MODE (production)');
+    return 'production';
+  }
+  
+  if (mode === 'development') {
+    console.log('[EnvironmentService] Environment detected from Vite MODE (development)');
+    return 'development';
+  }
+  
+  // Priority 2: Explicit VITE_ENVIRONMENT
   const viteEnv = import.meta.env.VITE_ENVIRONMENT;
   console.log('[EnvironmentService] VITE_ENVIRONMENT:', viteEnv);
   
@@ -16,7 +30,7 @@ export const detectEnvironment = (): Environment => {
     return viteEnv;
   }
   
-  // Priority 2: NODE_ENV (build-time indicator)
+  // Priority 3: NODE_ENV (build-time indicator)
   const nodeEnv = import.meta.env.NODE_ENV;
   console.log('[EnvironmentService] NODE_ENV:', nodeEnv);
   
@@ -25,32 +39,39 @@ export const detectEnvironment = (): Environment => {
     return 'production';
   }
   
-  // Priority 3: Vite mode (fallback)
-  const mode = import.meta.env.MODE;
-  console.log('[EnvironmentService] MODE:', mode);
-  
-  if (mode === 'production') {
-    console.log('[EnvironmentService] Environment detected from MODE (production)');
-    return 'production';
-  }
-  
   // Priority 4: Check for production-specific environment variables
   const prodApiUrl = import.meta.env.VITE_PROD_API_BASE_URL;
   const devApiUrl = import.meta.env.VITE_DEV_API_BASE_URL;
+  const prodEnvVar = import.meta.env.VITE_PROD_ENVIRONMENT;
   
+  // If we have production environment variable set
+  if (prodEnvVar === 'production') {
+    console.log('[EnvironmentService] Environment detected from VITE_PROD_ENVIRONMENT (production)');
+    return 'production';
+  }
+  
+  // If we have production vars but no dev vars (Windows build scenario)
   if (prodApiUrl && !devApiUrl) {
     console.log('[EnvironmentService] Environment detected as production (has prod vars, no dev vars)');
+    return 'production';
+  }
+  
+  // Priority 5: Check if we have production API URL configured (Windows build fix)
+  if (prodApiUrl && prodApiUrl !== 'http://localhost:8080' && prodApiUrl !== 'http://localhost:8080/') {
+    console.log('[EnvironmentService] Environment detected as production (has non-localhost prod API URL)');
     return 'production';
   }
   
   // Default to development with warning
   console.warn('[EnvironmentService] Could not reliably detect environment, defaulting to development');
   console.log('[EnvironmentService] Available env indicators:', {
+    MODE: mode,
     VITE_ENVIRONMENT: viteEnv,
     NODE_ENV: nodeEnv,
-    MODE: mode,
+    VITE_PROD_ENVIRONMENT: prodEnvVar,
     hasProdVars: !!prodApiUrl,
-    hasDevVars: !!devApiUrl
+    hasDevVars: !!devApiUrl,
+    prodApiUrl: prodApiUrl
   });
   
   return 'development';

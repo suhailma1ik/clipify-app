@@ -88,7 +88,17 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
     setError(null);
 
     try {
-      console.log('🔐 Requesting accessibility permissions...');
+      console.log('🔐 Requesting input monitoring permission...');
+      
+      // First, try to trigger input monitoring permission prompt
+      try {
+        await invoke('request_input_monitoring_permission');
+        console.log('✅ Input monitoring permission check completed');
+      } catch (inputErr) {
+        console.log('Input monitoring permission needed:', inputErr);
+      }
+      
+      console.log('🔐 Opening accessibility settings...');
       await invoke('open_accessibility_settings');
       console.log('✅ Accessibility settings opened successfully');
       
@@ -98,7 +108,7 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
       }, 2000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('❌ Failed to open accessibility settings:', errorMessage);
+      console.error('❌ Failed to request permissions:', errorMessage);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
