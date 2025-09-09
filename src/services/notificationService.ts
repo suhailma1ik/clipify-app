@@ -92,12 +92,30 @@ export class NotificationService {
       if (!this.permissionGranted) {
         const permission = await requestPermission();
         this.permissionGranted = permission === 'granted';
+        
+        // Windows-specific: Retry permission request if failed
+        if (!this.permissionGranted && this.isWindows()) {
+          console.log('Windows: Retrying notification permission request...');
+          await this.delay(1000); // Wait 1 second
+          const retryPermission = await requestPermission();
+          this.permissionGranted = retryPermission === 'granted';
+        }
       }
 
       this.initialized = true;
       console.log('Notification service initialized. Permission granted:', this.permissionGranted);
+      
+      // Windows-specific: Log additional debug info
+      if (this.isWindows()) {
+        console.log('Windows notification system detected');
+      }
     } catch (error) {
       console.error('Failed to initialize notification service:', error);
+      
+      // Windows-specific error handling
+      if (this.isWindows()) {
+        console.warn('Windows notification initialization failed. This may be due to Windows notification settings or permissions.');
+      }
       this.initialized = true; // Set to true to avoid repeated initialization attempts
     }
   }
@@ -113,8 +131,27 @@ export class NotificationService {
 
       if (!this.permissionGranted) {
         console.warn('Notification permission not granted, falling back to console log');
-        console.log(`${options.type?.toUpperCase() || 'NOTIFICATION'}: ${options.title} - ${options.body}`);
-        return false;
+        
+        // Windows-specific: Try to request permission again
+        if (this.isWindows()) {
+          console.log('Windows: Attempting to re-request notification permission...');
+          try {
+            const permission = await requestPermission();
+            this.permissionGranted = permission === 'granted';
+            if (!this.permissionGranted) {
+              console.warn('Windows: Notification permission still denied after retry');
+              console.log(`${options.type?.toUpperCase() || 'NOTIFICATION'}: ${options.title} - ${options.body}`);
+              return false;
+            }
+          } catch (error) {
+            console.error('Windows: Failed to re-request notification permission:', error);
+            console.log(`${options.type?.toUpperCase() || 'NOTIFICATION'}: ${options.title} - ${options.body}`);
+            return false;
+          }
+        } else {
+          console.log(`${options.type?.toUpperCase() || 'NOTIFICATION'}: ${options.title} - ${options.body}`);
+          return false;
+        }
       }
 
       await sendNotification({
@@ -128,6 +165,24 @@ export class NotificationService {
       return true;
     } catch (error) {
       console.error('Failed to send notification:', error);
+      
+      // Windows-specific error handling and retry
+      if (this.isWindows()) {
+        console.log('Windows: Retrying notification after error...');
+        try {
+          await this.delay(500);
+          await sendNotification({
+            title: options.title,
+            body: options.body,
+            icon: options.icon || this.getDefaultIcon(options.type)
+          });
+          console.log('Notification sent on retry:', options.title);
+          return true;
+        } catch (retryError) {
+          console.error('Windows: Notification retry also failed:', retryError);
+        }
+      }
+      
       // Fallback to console log
       console.log(`${options.type?.toUpperCase() || 'NOTIFICATION'}: ${options.title} - ${options.body}`);
       return false;
@@ -322,7 +377,21 @@ export class NotificationService {
   }
 
   /**
-   * Enhanced notification with troubleshooting steps
+   * Check if running on Windows
+   */
+  private isWindows(): boolean {
+    return typeof window !== 'undefined' && window.navigator.platform.toLowerCase().includes('win');
+  }
+
+  /**
+   * Delay helper for retry logic
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Enhanced notification with troubleshooting support
    */
   async sendEnhancedNotification(options: EnhancedNotificationOptions): Promise<boolean> {
     let body = options.body;

@@ -46,20 +46,37 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: Install WiX Toolset 3.14.1
+      - name: Install WiX Toolset
         run: |
-          Write-Host "Downloading WiX Toolset v3.14.1..."
-          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip -OutFile wix.zip
-          Expand-Archive wix.zip -DestinationPath "C:\wix"
+          Write-Host "Installing WiX Toolset v3.14.1..."
 
-          echo "C:\wix" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "WIX=C:\wix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Use chocolatey for reliable WiX installation
+          Write-Host "Installing WiX via Chocolatey..."
+          choco install wixtoolset --version=3.14.1 --force --no-progress
 
-          if (Test-Path "C:\wix\candle.exe") {
-            Write-Host "✅ WiX installed at C:\wix"
-            & "C:\wix\candle.exe" -? | Select-Object -First 1
+          # Refresh environment variables
+          refreshenv
+
+          # Verify installation
+          Write-Host "Verifying WiX installation..."
+          $wixPath = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+
+          if (Test-Path "$wixPath\candle.exe") {
+            Write-Host "✅ WiX found at: $wixPath"
+            
+            # Add to PATH and set environment variables
+            echo "$wixPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            echo "WIX=$wixPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            
+            # Test functionality
+            try {
+              $candleVersion = & "$wixPath\candle.exe" -? 2>&1 | Select-Object -First 1
+              Write-Host "✅ Candle version: $candleVersion"
+            } catch {
+              Write-Warning "WiX tools may have issues: $_"
+            }
           } else {
-            Write-Error "❌ WiX install failed"
+            Write-Error "❌ WiX installation failed"
             exit 1
           }
 
@@ -86,16 +103,45 @@ jobs:
         run: |
           Write-Host "Starting Tauri MSI build..."
 
-          # Verify WiX
-          if (Get-Command "candle.exe" -ErrorAction SilentlyContinue) {
-            Write-Host "✅ candle.exe found"
-          } else {
-            Write-Error "❌ WiX not found in PATH"
-            exit 1
+          # Verify WiX is accessible
+          Write-Host "Current WiX environment:"
+          Write-Host "  WIX: $env:WIX"
+          Write-Host "  PATH contains WiX: $($env:PATH -like '*WiX*')"
+
+          # Verify WiX tools are accessible
+          try {
+            $candleTest = & "candle.exe" -? 2>&1 | Select-Object -First 1
+            Write-Host "✅ WiX candle.exe accessible: $candleTest"
+          } catch {
+            Write-Host "❌ Cannot access candle.exe: $_"
+            
+            # Try to find WiX manually
+            $possiblePaths = @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "${env:ProgramFiles}\WiX Toolset v3.14\bin",
+              "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+            )
+            
+            foreach ($path in $possiblePaths) {
+              if (Test-Path "$path\candle.exe") {
+                Write-Host "Found WiX at: $path"
+                $env:PATH = "$path;$env:PATH"
+                break
+              }
+            }
           }
 
-          # Build MSI package
-          npx tauri build --bundles msi --verbose
+          # Final verification
+          try {
+            & "candle.exe" -? | Select-Object -First 1
+            Write-Host "✅ WiX tools ready for Tauri build"
+          } catch {
+            Write-Error "❌ WiX tools still not accessible. Build will likely fail."
+          }
+
+          # Build MSI package with Tauri CLI
+          Write-Host "Building MSI package..."
+          npm run tauri:build -- --bundles msi --verbose
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

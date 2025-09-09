@@ -67,12 +67,6 @@
     "shortDescription": "Professional Text Cleanup Tool",
     "longDescription": "Clipify is a powerful desktop application that helps you clean up and rephrase text with AI assistance using global hotkeys.",
     "fileAssociations": [],
-    "protocols": [
-      {
-        "name": "clipify",
-        "schemes": ["clipify"]
-      }
-    ],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
