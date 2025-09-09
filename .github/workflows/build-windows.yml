@@ -145,8 +145,13 @@ jobs:
           $env:WIX = $wixPath
           $env:WIX_TOOLSET_PATH = $wixPath
           
+          # Set ring crate environment variables to avoid build issues
+          $env:RING_PREGENERATE_ASM = "1"
+          $env:CARGO_BUILD_JOBS = "1"
+          
           Write-Host "WiX Path: $wixPath"
           Write-Host "PATH: $env:PATH"
+          Write-Host "Ring crate env vars set for stable build"
           
           # Verify WiX is accessible
           Write-Host "Verifying WiX accessibility..."
