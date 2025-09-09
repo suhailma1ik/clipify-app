@@ -48,54 +48,43 @@ jobs:
           
       - name: Install WiX Toolset
         run: |
-          Write-Host "Installing WiX Toolset v3.11.2..."
+          Write-Host "Installing WiX Toolset v3.14.1 (matching Tauri expectations)..."
           
-          # Use official WiX installer for better reliability
-          $wixInstallerUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe"
-          $wixInstaller = "$env:TEMP\wix311.exe"
-          $wixDir = "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
+          # Download WiX 3.14.1 binaries directly (matches what Tauri expects)
+          $wixBinUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          $wixZip = "$env:TEMP\wix314-binaries.zip"
+          $wixDir = "C:\wix314"
           
-          # Download WiX installer
-          Write-Host "Downloading WiX installer..."
-          Invoke-WebRequest -Uri $wixInstallerUrl -OutFile $wixInstaller -UseBasicParsing
+          # Download and extract WiX binaries
+          Write-Host "Downloading WiX 3.14.1 binaries..."
+          Invoke-WebRequest -Uri $wixBinUrl -OutFile $wixZip -UseBasicParsing
           
-          # Install WiX silently
-          Write-Host "Installing WiX Toolset..."
-          Start-Process -FilePath $wixInstaller -ArgumentList "/quiet" -Wait -NoNewWindow
+          Write-Host "Extracting WiX binaries..."
+          New-Item -ItemType Directory -Path $wixDir -Force
+          Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
           
-          # Verify installation
-          if (Test-Path $wixDir) {
-            Write-Host "WiX installed successfully at: $wixDir"
-          } else {
-            # Fallback to manual binary download
-            Write-Host "Installer failed, trying manual binary download..."
-            $wixBinUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip"
-            $wixZip = "$env:TEMP\wix311-binaries.zip"
-            $wixDir = "C:\wix311"
-            
-            Invoke-WebRequest -Uri $wixBinUrl -OutFile $wixZip -UseBasicParsing
-            New-Item -ItemType Directory -Path $wixDir -Force
-            Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
-          }
-          
-          # Set environment variables
+          # Set environment variables for current and future steps
           Write-Host "Setting WiX environment variables..."
           echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "WIX_TOOLSET_PATH=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           
-          # Verify WiX tools
+          # Verify WiX tools installation
           Write-Host "Verifying WiX installation..."
           if ((Test-Path "$wixDir\candle.exe") -and (Test-Path "$wixDir\light.exe")) {
             Write-Host "✅ WiX tools found:"
             Write-Host "  - candle.exe: $(Test-Path "$wixDir\candle.exe")"
             Write-Host "  - light.exe: $(Test-Path "$wixDir\light.exe")"
             
-            # Test WiX tools
+            # Test WiX tools functionality
             try {
-              & "$wixDir\candle.exe" -? 2>$null | Select-Object -First 1
-              & "$wixDir\light.exe" -? 2>$null | Select-Object -First 1
-              Write-Host "✅ WiX tools are functional"
+              $candleVersion = & "$wixDir\candle.exe" -? 2>&1 | Select-Object -First 1
+              Write-Host "✅ Candle version: $candleVersion"
+              
+              $lightVersion = & "$wixDir\light.exe" -? 2>&1 | Select-Object -First 1  
+              Write-Host "✅ Light version: $lightVersion"
+              
+              Write-Host "✅ WiX 3.14.1 tools are functional"
             } catch {
               Write-Warning "WiX tools installed but may have issues: $_"
             }
@@ -134,46 +123,23 @@ jobs:
         run: |
           Write-Host "Starting Tauri MSI build..."
           
-          # Ensure WiX is in PATH for this step
-          $wixPath = if (Test-Path "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin") {
-            "${env:ProgramFiles(x86)}\WiX Toolset v3.11\bin"
-          } else {
-            "C:\wix311"
-          }
+          # Verify WiX is accessible (should be set from previous step)
+          Write-Host "Current WiX environment:"
+          Write-Host "  WIX: $env:WIX"
+          Write-Host "  WIX_TOOLSET_PATH: $env:WIX_TOOLSET_PATH"
+          Write-Host "  PATH contains WiX: $($env:PATH -like '*wix*')"
           
-          $env:PATH = "$wixPath;$env:PATH"
-          $env:WIX = $wixPath
-          $env:WIX_TOOLSET_PATH = $wixPath
-          
-          # Set ring crate environment variables to avoid build issues
-          $env:RING_PREGENERATE_ASM = "1"
-          $env:CARGO_BUILD_JOBS = "1"
-          
-          Write-Host "WiX Path: $wixPath"
-          Write-Host "PATH: $env:PATH"
-          Write-Host "Ring crate env vars set for stable build"
-          
-          # Verify WiX is accessible
-          Write-Host "Verifying WiX accessibility..."
+          # Quick verification that WiX tools are accessible
           try {
-            $candleVersion = & "$wixPath\candle.exe" -? 2>$null | Select-Object -First 1
-            Write-Host "✅ Candle.exe accessible: $candleVersion"
+            $candleTest = & "candle.exe" -? 2>&1 | Select-Object -First 1
+            Write-Host "✅ WiX tools accessible via PATH"
           } catch {
-            Write-Error "❌ Cannot access candle.exe: $_"
-            exit 1
+            Write-Host "⚠️ WiX not in PATH, but should be available via environment variables"
           }
           
-          # Build with Tauri CLI directly
+          # Build MSI package with Tauri CLI
           Write-Host "Building MSI package..."
-          try {
-            npm run tauri:build -- --bundles msi --verbose
-            Write-Host "✅ MSI build completed successfully"
-          } catch {
-            Write-Error "❌ MSI build failed: $_"
-            Write-Host "Build logs:"
-            Get-Content "src-tauri/target/release/build.log" -ErrorAction SilentlyContinue
-            exit 1
-          }
+          npm run tauri:build -- --bundles msi --verbose
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
