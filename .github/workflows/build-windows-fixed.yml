@@ -1,0 +1,265 @@
+name: Build Windows MSI (Fixed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Create release'
+        required: false
+        default: false
+        type: boolean
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: false
+        default: ''
+        type: string
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows-msi:
+    runs-on: windows-latest
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          
+      - name: Install WiX Toolset (Alternative Method)
+        run: |
+          Write-Host "Installing WiX Toolset using alternative method..."
+          
+          # Method 1: Try chocolatey first
+          try {
+            Write-Host "Attempting chocolatey installation..."
+            choco install wixtoolset --version=3.14.1 --force --no-progress --timeout=300
+            
+            # Check if successful
+            $wixPath = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+            if (Test-Path "$wixPath\candle.exe") {
+              Write-Host "✅ WiX installed via Chocolatey at: $wixPath"
+              echo "$wixPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              echo "WIX=$wixPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              exit 0
+            }
+          } catch {
+            Write-Host "Chocolatey installation failed: $_"
+          }
+          
+          # Method 2: Manual download and setup
+          Write-Host "Attempting manual WiX installation..."
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+          $wixZip = "$env:TEMP\wix314-binaries.zip"
+          $wixDir = "C:\wix314"
+          
+          try {
+            # Download with retry logic
+            $maxRetries = 3
+            $retryCount = 0
+            do {
+              try {
+                Write-Host "Downloading WiX (attempt $($retryCount + 1)/$maxRetries)..."
+                Invoke-WebRequest -Uri $wixUrl -OutFile $wixZip -UseBasicParsing -TimeoutSec 300
+                break
+              } catch {
+                $retryCount++
+                if ($retryCount -ge $maxRetries) { throw }
+                Start-Sleep -Seconds 10
+              }
+            } while ($retryCount -lt $maxRetries)
+            
+            # Extract
+            Write-Host "Extracting WiX..."
+            if (Test-Path $wixDir) { Remove-Item $wixDir -Recurse -Force }
+            New-Item -ItemType Directory -Path $wixDir -Force | Out-Null
+            Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
+            
+            # Verify and setup
+            if ((Test-Path "$wixDir\candle.exe") -and (Test-Path "$wixDir\light.exe")) {
+              Write-Host "✅ WiX tools extracted successfully"
+              
+              # Add to PATH and environment
+              echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              
+              # Test tools
+              $candleVersion = & "$wixDir\candle.exe" -? 2>&1 | Select-Object -First 1
+              Write-Host "✅ Candle ready: $candleVersion"
+              
+            } else {
+              Write-Error "❌ WiX tools not found after extraction"
+              Get-ChildItem $wixDir | Format-Table Name, Length -AutoSize
+              exit 1
+            }
+            
+          } catch {
+            Write-Error "❌ Manual WiX installation failed: $_"
+            exit 1
+          }
+          
+      - name: Determine version
+        id: version
+        run: |
+          if ("${{ github.event.inputs.version }}" -ne "") {
+            $version = "${{ github.event.inputs.version }}"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}"
+          } else {
+            $version = "v0.1.0-dev"
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
+          
+      - name: Install frontend dependencies
+        run: npm ci
+        
+      - name: Build frontend
+        run: npm run build:prod
+        
+      - name: Pre-build WiX verification
+        run: |
+          Write-Host "=== Pre-build WiX Verification ==="
+          Write-Host "WIX environment variable: $env:WIX"
+          Write-Host "PATH contains WiX: $($env:PATH -contains $env:WIX)"
+          
+          # Test WiX tools accessibility
+          try {
+            $candle = Get-Command candle.exe -ErrorAction Stop
+            Write-Host "✅ candle.exe found at: $($candle.Source)"
+            
+            $light = Get-Command light.exe -ErrorAction Stop  
+            Write-Host "✅ light.exe found at: $($light.Source)"
+            
+            # Test execution
+            $candleHelp = & candle.exe -? 2>&1 | Select-Object -First 2
+            Write-Host "✅ Candle executable: $($candleHelp -join ' ')"
+            
+          } catch {
+            Write-Error "❌ WiX tools verification failed: $_"
+            
+            # Emergency PATH fix
+            if ($env:WIX -and (Test-Path "$env:WIX\candle.exe")) {
+              Write-Host "Adding WiX to PATH as emergency fix..."
+              $env:PATH = "$env:WIX;$env:PATH"
+              
+              try {
+                & candle.exe -? | Select-Object -First 1
+                Write-Host "✅ Emergency PATH fix successful"
+              } catch {
+                Write-Error "❌ Emergency PATH fix failed"
+                exit 1
+              }
+            } else {
+              exit 1
+            }
+          }
+        
+      - name: Build Tauri MSI
+        run: |
+          Write-Host "=== Starting Tauri MSI Build ==="
+          
+          # Final environment check
+          Write-Host "Final WiX check:"
+          Write-Host "  WIX: $env:WIX"
+          Write-Host "  Candle accessible: $(if (Get-Command candle.exe -ErrorAction SilentlyContinue) { '✅ Yes' } else { '❌ No' })"
+          
+          # Build with enhanced error handling
+          try {
+            Write-Host "Building MSI package..."
+            npm run tauri:build -- --bundles msi --verbose
+            Write-Host "✅ MSI build completed successfully"
+          } catch {
+            Write-Error "❌ Tauri build failed: $_"
+            
+            # Diagnostic information
+            Write-Host "=== Build Failure Diagnostics ==="
+            Write-Host "Current directory: $(Get-Location)"
+            Write-Host "Tauri config exists: $(Test-Path 'src-tauri/tauri.conf.json')"
+            Write-Host "Target directory: $(if (Test-Path 'src-tauri/target') { Get-ChildItem 'src-tauri/target' | Format-Table Name -AutoSize } else { 'Not found' })"
+            
+            exit 1
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Verify MSI output
+        run: |
+          Write-Host "=== MSI Build Verification ==="
+          $msiPath = "src-tauri/target/release/bundle/msi"
+          
+          if (Test-Path $msiPath) {
+            $msiFiles = Get-ChildItem -Path $msiPath -Filter "*.msi"
+            if ($msiFiles.Count -gt 0) {
+              Write-Host "✅ MSI files generated:"
+              $msiFiles | ForEach-Object {
+                $sizeMB = [math]::Round($_.Length / 1MB, 2)
+                Write-Host "  - $($_.Name) ($sizeMB MB)"
+              }
+            } else {
+              Write-Error "❌ No MSI files found in output directory"
+              exit 1
+            }
+          } else {
+            Write-Error "❌ MSI output directory not found: $msiPath"
+            exit 1
+          }
+          
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.release == 'true' || github.ref_type == 'tag' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Clipify ${{ steps.version.outputs.version }}"
+          body: |
+            ## Windows MSI Installer
+            
+            This release includes a Windows MSI installer for Clipify.
+            
+            ### Installation
+            1. Download the `.msi` file from the assets below
+            2. Run the installer as administrator
+            3. Follow the installation wizard
+            
+            ### Features
+            - Global hotkey support (Cmd+Shift+C)
+            - AI-powered text cleanup and rephrasing
+            - Secure authentication with JWT tokens
+            - System tray integration
+            
+            ### System Requirements
+            - Windows 10 or later
+            - Microsoft Edge WebView2 (automatically installed if missing)
+          draft: ${{ github.event.inputs.release != 'true' }}
+          prerelease: ${{ contains(steps.version.outputs.version, 'dev') || contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
+          files: |
+            src-tauri/target/release/bundle/msi/*.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clipify-windows-msi-${{ steps.version.outputs.version }}
+          path: src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 30
