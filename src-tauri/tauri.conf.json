@@ -41,7 +41,7 @@
   },
   "plugins": {
     "deep-link": {
-      "schemes": ["clipify", "appclipify"]
+      "schemes": ["clipify"]
     },
     "notification": {
       "identifier": "com.suhailmalik.clipify"
