@@ -168,7 +168,7 @@ class AuthService {
       // Log all URL parameters for debugging
       const allParams: Record<string, string> = {};
       params.forEach((value, key) => {
-        allParams[key] = key === 'auth_code' || key === 'token' ? '[REDACTED]' : value;
+        allParams[key] = key === 'auth_code' || key === 'token' || key === 'refresh_token' ? '[REDACTED]' : value;
       });
       getLoggingService().info('auth', 'URL parameters found', { 
         scheme: urlObj.protocol.replace(':', ''),
@@ -183,39 +183,54 @@ class AuthService {
         throw new Error(`Auth error: ${error} - ${errorDescription}`);
       }
 
-      // Handle both formats:
-      // 1. Direct token format: clipify://auth/callback?token=...&user_id=...&email=...
-      // 2. Auth code format: clipify://auth/callback?auth_code=...&state=...
+      // Supported formats:
+      // - Direct token format from server: clipify://auth/callback?token=...&user_id=...&email=...&name=...&plan=...
+      // - Website redirect format: clipify://auth/callback?token=...&refresh_token=...&user={...}
       
       const token = params.get('token');
-      const authCode = params.get('auth_code');
+      const refreshToken = params.get('refresh_token');
       
       if (token) {
         getLoggingService().info('auth', 'Using direct token format');
-        // Direct token format
-        const userId = params.get('user_id');
-        const email = params.get('email');
-        
+        // Build base callback data
         const callbackData: AuthCallbackData = {
           access_token: token,
+          refresh_token: refreshToken ?? undefined,
           token_type: 'Bearer',
-          expires_in: 3600, // 1 hour as set by server
+          expires_in: 86400, // 1 day default; server may vary
         };
 
-        // Create user object from URL parameters
-        if (userId && email) {
-          callbackData.user = {
-            id: userId,
-            email: email,
-            name: email.split('@')[0], // Use email prefix as fallback name
-          };
+        // Prefer aggregated user JSON if present
+        const userJsonParam = params.get('user');
+        if (userJsonParam) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(userJsonParam));
+            callbackData.user = {
+              id: parsed.id,
+              email: parsed.email,
+              name: parsed.name,
+              avatar: parsed.picture,
+            };
+          } catch (e) {
+            getLoggingService().warn('auth', 'Failed to parse user JSON param, falling back to discrete params', e as Error);
+          }
+        }
+
+        // Fallback to discrete params if needed
+        if (!callbackData.user) {
+          const userId = params.get('user_id');
+          const email = params.get('email');
+          const name = params.get('name');
+          if (userId && email) {
+            callbackData.user = {
+              id: userId,
+              email: email,
+              name: name || email.split('@')[0],
+            };
+          }
         }
 
         return callbackData;
-      } else if (authCode) {
-        getLoggingService().info('auth', 'Using auth code format, will exchange for token');
-        // Auth code format - need to exchange for token
-        return await this.exchangeAuthCodeForToken(authCode, params.get('state'));
       } else {
         throw new Error('No access token or auth code found in callback URL');
       }
@@ -228,75 +243,7 @@ class AuthService {
     }
   }
 
-  /**
-   * Exchange authorization code for access token
-   */
-  private async exchangeAuthCodeForToken(authCode: string, state: string | null): Promise<AuthCallbackData> {
-    try {
-      const config = getEnvironmentConfig();
-      const tokenEndpoint = `${config.api.baseUrl}/api/v1/auth/token`;
-      
-      const requestBody = {
-        code: authCode,
-        client_id: config.oauth.clientId,
-        grant_type: 'authorization_code',
-        redirect_uri: config.oauth.redirectUri,
-        state: state,
-      };
-      
-      getLoggingService().info('auth', 'Exchanging auth code for token', { 
-        tokenEndpoint, 
-        clientId: config.oauth.clientId,
-        redirectUri: config.oauth.redirectUri,
-        hasAuthCode: !!authCode,
-        hasState: !!state 
-      });
-      
-      const response = await fetch(tokenEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        const errorMessage = `Token exchange failed: ${response.status} ${response.statusText} - ${errorText}`;
-        getLoggingService().error('auth', errorMessage, new Error(errorMessage), { 
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-          requestBody 
-        });
-        throw new Error(errorMessage);
-      }
-
-      const tokenData = await response.json();
-      
-      getLoggingService().info('auth', 'Successfully exchanged auth code for token', {
-        hasAccessToken: !!tokenData.access_token,
-        hasRefreshToken: !!tokenData.refresh_token,
-        tokenType: tokenData.token_type,
-        expiresIn: tokenData.expires_in
-      });
-      
-      return {
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        token_type: tokenData.token_type || 'Bearer',
-        expires_in: tokenData.expires_in,
-        scope: tokenData.scope,
-        user: tokenData.user,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown token exchange error';
-      getLoggingService().error('auth', 'Failed to exchange auth code for token', error as Error, { authCode, state, errorMessage });
-      
-      // Throw the error instead of returning null for better error propagation
-      throw new Error(`Token exchange failed: ${errorMessage}`);
-    }
-  }
+  // Removed obsolete authorization code exchange flow. Desktop app no longer talks to Google directly.
 
   /**
    * Store authentication tokens
@@ -326,16 +273,17 @@ class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      // Get the API endpoint
+      // Open website login with redirect to our app's deep link scheme from config
       const config = getEnvironmentConfig();
-      // Ensure we hit the Go server route mounted under /api/v1
-      const authUrl = `${config.api.baseUrl}/api/v1/auth/desktop-login`;
+      const websiteBase = (config.frontend.baseUrl || '').replace(/\/$/, '');
+      const redirectScheme = config.oauth.redirectUri; // e.g., clipify://auth/callback
+      const loginUrl = `${websiteBase}/login?redirect=${encodeURIComponent(redirectScheme)}`;
       
-      getLoggingService().info('auth', 'Starting authentication flow', { authUrl });
-      await notificationService.info('Authentication', 'Opening browser for authentication...');
+      getLoggingService().info('auth', 'Starting authentication flow via website', { loginUrl });
+      await notificationService.info('Authentication', 'Opening website for authentication...');
       
-      // Open browser to auth URL
-      await open(authUrl);
+      // Open browser to website login URL
+      await open(loginUrl);
       
       getLoggingService().info('auth', 'Browser opened for authentication');
     } catch (error) {

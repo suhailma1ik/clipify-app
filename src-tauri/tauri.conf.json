@@ -41,10 +41,7 @@
   },
   "plugins": {
     "deep-link": {
-      "schemes": ["clipify"]
-    },
-    "notification": {
-      "identifier": "com.suhailmalik.clipify"
+      "schemes": ["clipify", "appclipify"]
     }
   },
   "bundle": {
@@ -62,7 +59,6 @@
     "category": "DeveloperTool",
     "shortDescription": "Professional Text Cleanup Tool",
     "longDescription": "Clipify is a powerful desktop application that helps you clean up and rephrase text with AI assistance using global hotkeys.",
-    "fileAssociations": [],
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15",
@@ -75,11 +71,6 @@
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
-      "allowDowngrades": false,
-      "webviewInstallMode": {
-        "type": "downloadBootstrapper",
-        "silent": true
-      },
       "wix": {
         "language": "en-US",
         "template": "main.wxs",
@@ -92,13 +83,6 @@
         "enableElevatedUpdateTask": false,
         "bannerPath": null,
         "dialogImagePath": null
-      },
-      "nsis": {
-        "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico",
-        "installMode": "currentUser",
-        "languages": ["English"],
-        "template": null
       }
     }
   }

@@ -47,9 +47,6 @@
     },
     "deep-link": {
       "schemes": ["clipify"]
-    },
-    "notification": {
-      "identifier": "com.suhailmalik.clipify"
     }
   },
   "bundle": {
@@ -61,41 +58,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "copyright": "Copyright © 2024 Suhail Malik. All rights reserved.",
-    "category": "DeveloperTool",
-    "shortDescription": "Professional Text Cleanup Tool",
-    "longDescription": "Clipify is a powerful desktop application that helps you clean up and rephrase text with AI assistance using global hotkeys.",
-    "fileAssociations": [],
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "",
-      "allowDowngrades": false,
-      "webviewInstallMode": {
-        "type": "downloadBootstrapper",
-        "silent": true
-      },
-      "wix": {
-        "language": "en-US",
-        "template": "main.wxs",
-        "fragmentPaths": [],
-        "componentGroupRefs": [],
-        "componentRefs": [],
-        "featureGroupRefs": [],
-        "featureRefs": [],
-        "mergeRefs": [],
-        "enableElevatedUpdateTask": false,
-        "bannerPath": null,
-        "dialogImagePath": null
-      },
-      "nsis": {
-        "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico",
-        "installMode": "currentUser",
-        "languages": ["English"],
-        "template": null
-      }
-    }
+    ]
   }
 }

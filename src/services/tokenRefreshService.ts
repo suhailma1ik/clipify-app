@@ -8,12 +8,18 @@ import { getEnvironmentConfig } from './environmentService';
 import { fetch } from '@tauri-apps/plugin-http';
 
 export interface TokenRefreshResponse {
-  access_token: string;
+  // snake_case fields (common OAuth style)
+  access_token?: string;
   refresh_token?: string;
   token_type?: string;
   expires_in?: number;
   scope?: string;
   user?: any;
+
+  // camelCase fields (server style)
+  token?: string;
+  expiresIn?: number;
+  refresh_expires_in?: number;
 }
 
 export class TokenRefreshService {
@@ -71,21 +77,27 @@ export class TokenRefreshService {
       }
 
       const refreshData: TokenRefreshResponse = await response.json();
-      
+
+      // Normalize response fields (support both snake_case and camelCase)
+      const newAccessToken = refreshData.access_token || refreshData.token;
+      const newRefreshToken = refreshData.refresh_token || refreshToken;
+      const newExpiresIn = refreshData.expires_in ?? refreshData.expiresIn;
+      const newTokenType = refreshData.token_type || 'Bearer';
+
       // Validate the response has required fields
-      if (!refreshData.access_token) {
-        console.error('[TokenRefreshService] Token refresh response missing access_token');
+      if (!newAccessToken) {
+        console.error('[TokenRefreshService] Token refresh response missing access token');
         return false;
       }
 
       // Store the new tokens
       const tokenInfo: TokenInfo = {
-        accessToken: refreshData.access_token,
-        refreshToken: refreshData.refresh_token || refreshToken, // Use new refresh token if provided, otherwise keep existing
-        tokenType: refreshData.token_type || 'Bearer',
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        tokenType: newTokenType,
         scope: refreshData.scope,
-        expiresAt: refreshData.expires_in 
-          ? Math.floor(Date.now() / 1000) + refreshData.expires_in
+        expiresAt: typeof newExpiresIn === 'number'
+          ? Math.floor(Date.now() / 1000) + newExpiresIn
           : undefined,
       };
 

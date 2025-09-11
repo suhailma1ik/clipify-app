@@ -166,7 +166,7 @@ export class SecureTokenStorage {
           accessToken: token,
           ...metadata,
           // Add timestamp for when token was stored
-          ...(metadata.expiresAt ? {} : { expiresAt: Math.floor(Date.now() / 1000) + 3600 }) // Default 1 hour if not provided
+          ...(metadata.expiresAt ? {} : { expiresAt: Math.floor(Date.now() / 1000) + 86400 }) // Default 1 day if not provided
         };
         
         await this.store!.set(STORAGE_KEYS.TOKEN_METADATA, tokenMetadata);
