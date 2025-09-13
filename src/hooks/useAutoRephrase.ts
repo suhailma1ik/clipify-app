@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { rephraseService } from '../services/rephraseService';
 import { getApiClient } from '../services/apiClient';
 import { writeToClipboard, statusMessages, getCurrentTimestamp, resetStatusAfterDelay } from '../utils';
@@ -14,6 +14,11 @@ export const useAutoRephrase = ({
   setShortcutStatus
 }: UseAutoRephraseProps) => {
   const authErrorHandler = getAuthErrorHandler();
+  const lastRequestTimeRef = useRef<number>(0);
+  const isProcessingRef = useRef<boolean>(false);
+  
+  // Debounce delay in milliseconds (prevent multiple calls within this window)
+  const DEBOUNCE_DELAY = 1000;
   
   const setupAutoRephraseListener = useCallback(async () => {
     try {
@@ -21,12 +26,33 @@ export const useAutoRephrase = ({
 
       const unlisten = await listen('auto-rephrase-request', async (event) => {
         const text = event.payload as string;
-        console.log('[useAutoRephrase] Auto-rephrase request received:', { textLength: text.length });
+        const currentTime = Date.now();
+        
+        console.log('[useAutoRephrase] Auto-rephrase request received:', { 
+          textLength: text.length,
+          timeSinceLastRequest: currentTime - lastRequestTimeRef.current,
+          isProcessing: isProcessingRef.current
+        });
 
         if (!text || text.trim().length === 0) {
           console.log('[useAutoRephrase] No text to rephrase');
           return;
         }
+
+        // Debouncing: Check if we're already processing or if it's too soon
+        if (isProcessingRef.current) {
+          console.log('[useAutoRephrase] Request ignored - already processing');
+          return;
+        }
+
+        if (currentTime - lastRequestTimeRef.current < DEBOUNCE_DELAY) {
+          console.log('[useAutoRephrase] Request ignored - too soon since last request');
+          return;
+        }
+
+        // Update tracking variables
+        lastRequestTimeRef.current = currentTime;
+        isProcessingRef.current = true;
 
         try {
           setShortcutStatus(statusMessages.rephrasing);
@@ -84,6 +110,8 @@ export const useAutoRephrase = ({
             );
           }
         } finally {
+          // Reset processing flag to allow future requests
+          isProcessingRef.current = false;
           resetStatusAfterDelay(setShortcutStatus);
         }
       });
@@ -93,7 +121,7 @@ export const useAutoRephrase = ({
     } catch (error) {
       console.error('[useAutoRephrase] Failed to setup auto-rephrase listener:', error);
     }
-  }, [showNotification, setShortcutStatus]);
+  }, [showNotification, setShortcutStatus, DEBOUNCE_DELAY]);
 
   return { setupAutoRephraseListener };
 };

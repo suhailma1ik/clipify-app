@@ -1,7 +1,10 @@
 use crate::clipboard::{save_history_to_file, ClipboardEntry, ClipboardHistoryState};
+use crate::clipboard_monitor::{ClipboardMonitor, ClipboardMonitorState};
 use crate::config::RephraseResponse;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
+#[cfg(target_os = "macos")]
+use tauri_plugin_shell::ShellExt;
 
 // Clipboard History Commands
 #[tauri::command]
@@ -10,6 +13,33 @@ pub async fn get_clipboard_history(
 ) -> Result<Vec<ClipboardEntry>, String> {
     let history = history_state.read().await;
     Ok(history.get_entries().clone())
+}
+
+#[tauri::command]
+pub async fn start_clipboard_monitoring(app_handle: AppHandle) -> Result<(), String> {
+    let monitor_state = app_handle.state::<ClipboardMonitorState>();
+    let mut monitor = monitor_state.write().await;
+    
+    if monitor.is_none() {
+        let history_state = app_handle.state::<ClipboardHistoryState>();
+        let clipboard_monitor = ClipboardMonitor::new(app_handle.clone(), history_state.inner().clone());
+        clipboard_monitor.start().await?;
+        *monitor = Some(clipboard_monitor);
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_clipboard_monitoring(app_handle: AppHandle) -> Result<(), String> {
+    let monitor_state = app_handle.state::<ClipboardMonitorState>();
+    let mut monitor = monitor_state.write().await;
+    
+    if let Some(clipboard_monitor) = monitor.take() {
+        clipboard_monitor.stop().await;
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -123,13 +153,6 @@ pub async fn rephrase_text(
     Err("Rephrase functionality should be called from frontend".to_string())
 }
 
-// Add a command to setup global shortcut (called from frontend)
-#[tauri::command]
-pub async fn setup_global_shortcut() -> Result<(), String> {
-    // This is now handled in the main setup, but we keep this command for compatibility
-    Ok(())
-}
-
 // Function to clean and beautify text according to Clipify specifications
 fn cleanup_text(text: &str) -> String {
     // Handle null, undefined, or empty text
@@ -190,6 +213,66 @@ pub async fn copy_selected_text_to_clipboard(
     {
         use std::time::Duration;
         use tokio::time::sleep;
+
+        // Ensure Accessibility permissions are granted before attempting keystroke simulation
+        match crate::system::check_accessibility_permissions() {
+            Ok(_) => {
+                // Permissions granted, proceed
+            }
+            Err(err) => {
+                // Try to automatically open the Accessibility settings screen for the user
+                let commands = vec![
+                    // macOS 13+ (Ventura) and 14+ (Sonoma) - System Settings
+                    vec!["x-apple.systemsettings:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility"],
+                    vec!["x-apple.systemsettings:com.apple.preference.security?Privacy_Accessibility"],
+                    // Legacy System Preferences (macOS 12 and earlier)
+                    vec!["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+                    vec!["/System/Library/PreferencePanes/Security.prefPane"],
+                    // Fallback methods with bundle identifiers
+                    vec!["-b", "com.apple.systempreferences", "/System/Library/PreferencePanes/Security.prefPane"],
+                    vec!["-b", "com.apple.SystemSettings"],
+                    // Last resort - open System Settings/Preferences root
+                    vec!["/System/Applications/System Settings.app"],
+                    vec!["/Applications/System Preferences.app"],
+                ];
+
+                let shell = app.shell();
+                let mut opened = false;
+                for cmd_args in commands {
+                    let result = shell.command("open").args(&cmd_args).spawn();
+                    if result.is_ok() {
+                        opened = true;
+                        break;
+                    }
+                }
+
+                // Notify the user with clear guidance
+                let mut body = String::from(
+                    "Accessibility permission is required for Cmd+Shift+C to simulate Cmd+C.\n\n"
+                );
+                body.push_str(
+                    "Please enable Clipify under Privacy & Security > Accessibility."
+                );
+                if !opened {
+                    body.push_str(
+                        "\n\nWe could not open System Settings automatically. Open it manually and enable Accessibility for Clipify."
+                    );
+                }
+
+                if let Err(notif_err) =
+                    tauri_plugin_notification::NotificationExt::notification(&app)
+                        .builder()
+                        .title("🔐 Accessibility Permission Required")
+                        .body(&body)
+                        .show()
+                {
+                    eprintln!("Failed to show accessibility notification: {}", notif_err);
+                }
+
+                // Return the original error so the caller knows permission is missing
+                return Err(err);
+            }
+        }
 
         // Store the current clipboard content to detect changes
         let _original_clipboard = app.clipboard().read_text().unwrap_or_default();

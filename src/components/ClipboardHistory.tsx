@@ -1,6 +1,6 @@
 import React from 'react';
 import { ClipboardHistoryProps } from '../types';
-import { formatTimestamp, getContentTypeIcon, commonStyles, addHoverEffect, removeHoverEffect } from '../utils';
+import { formatTimestamp, getContentTypeIcon } from '../utils';
 
 const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
   clipboardHistory,
@@ -17,25 +17,8 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
   onPasteFromHistory
 }) => {
   return (
-    <div style={{
-      ...commonStyles.card,
-      margin: '20px 0',
-      padding: '24px',
-      borderRadius: '16px',
-      background: 'rgba(255, 255, 255, 0.98)',
-      backdropFilter: 'blur(20px)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-      transition: 'all 0.3s ease'
-    }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px',
-        borderBottom: '2px solid rgba(102, 126, 234, 0.15)',
-        paddingBottom: '16px'
-      }}>
+    <div className="card card-hover">
+      <div className="row-between" style={{ marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid var(--color-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <div style={{
             background: 'linear-gradient(45deg, #e91e63, #ad1457)',
@@ -59,35 +42,7 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
             <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Last 10 copied items • Flycut-style interface</p>
           </div>
         </div>
-        <button
-          onClick={onToggleHistory}
-          style={{
-            ...commonStyles.button,
-            background: showHistory 
-              ? 'linear-gradient(135deg, #e91e63 0%, #ad1457 100%)'
-              : 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
-            color: 'white',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '10px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            transform: 'translateY(0)'
-          }}
-          onMouseEnter={(e) => {
-            addHoverEffect(e.target as HTMLElement);
-            (e.target as HTMLElement).style.transform = 'translateY(-2px)';
-            (e.target as HTMLElement).style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.2)';
-          }}
-          onMouseLeave={(e) => {
-            removeHoverEffect(e.target as HTMLElement);
-            (e.target as HTMLElement).style.transform = 'translateY(0)';
-            (e.target as HTMLElement).style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-          }}
-        >
+        <button onClick={onToggleHistory} className="btn btn-primary btn-lg">
           {showHistory ? '🙈 Hide History' : '👁️ Show History'}
         </button>
       </div>
@@ -98,113 +53,21 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
           <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
             <div style={{ flex: 1, position: 'relative' }}>
               <input
+                className="input"
                 type="text"
                 placeholder="🔍 Search clipboard history..."
                 value={searchQuery}
                 onChange={(e) => onSearchQueryChange(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '14px 18px',
-                  border: '2px solid rgba(102, 126, 234, 0.2)',
-                  borderRadius: '12px',
-                  fontSize: '15px',
-                  background: 'rgba(255, 255, 255, 0.95)',
-                  backdropFilter: 'blur(10px)',
-                  transition: 'all 0.3s ease',
-                  outline: 'none',
-                  fontFamily: 'inherit'
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'rgba(102, 126, 234, 0.6)';
-                  e.target.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
-                  e.target.style.transform = 'translateY(-1px)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'rgba(102, 126, 234, 0.2)';
-                  e.target.style.boxShadow = 'none';
-                  e.target.style.transform = 'translateY(0)';
-                }}
               />
             </div>
-            <button
-              onClick={onClearAllHistory}
-              style={{
-                padding: '10px 18px',
-                background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                boxShadow: '0 4px 12px rgba(244, 67, 54, 0.25)',
-                transition: 'all 0.3s ease',
-                transform: 'translateY(0)'
-              }}
-              onMouseEnter={(e) => {
-                addHoverEffect(e.target as HTMLElement);
-                (e.target as HTMLElement).style.transform = 'translateY(-2px)';
-                (e.target as HTMLElement).style.boxShadow = '0 6px 20px rgba(244, 67, 54, 0.35)';
-              }}
-              onMouseLeave={(e) => {
-                removeHoverEffect(e.target as HTMLElement);
-                (e.target as HTMLElement).style.transform = 'translateY(0)';
-                (e.target as HTMLElement).style.boxShadow = '0 4px 12px rgba(244, 67, 54, 0.25)';
-              }}
-            >
-              🗑️ Clear All
-            </button>
-            <button
-              onClick={onRefreshHistory}
-              style={{
-                padding: '10px 18px',
-                background: 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                boxShadow: '0 4px 12px rgba(33, 150, 243, 0.25)',
-                transition: 'all 0.3s ease',
-                transform: 'translateY(0)'
-              }}
-              onMouseEnter={(e) => {
-                addHoverEffect(e.target as HTMLElement);
-                (e.target as HTMLElement).style.transform = 'translateY(-2px)';
-                (e.target as HTMLElement).style.boxShadow = '0 6px 20px rgba(33, 150, 243, 0.35)';
-              }}
-              onMouseLeave={(e) => {
-                removeHoverEffect(e.target as HTMLElement);
-                (e.target as HTMLElement).style.transform = 'translateY(0)';
-                (e.target as HTMLElement).style.boxShadow = '0 4px 12px rgba(33, 150, 243, 0.25)';
-              }}
-            >
-              🔄 Refresh
-            </button>
+            <button onClick={onClearAllHistory} className="btn btn-danger">🗑️ Clear All</button>
+            <button onClick={onRefreshHistory} className="btn btn-secondary">🔄 Refresh</button>
           </div>
 
           {/* Two-Panel Layout */}
-          <div className="two-panel-layout" style={{
-            display: 'flex',
-            gap: '20px',
-            height: '520px',
-            border: '2px solid rgba(102, 126, 234, 0.2)',
-            borderRadius: '16px',
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            backdropFilter: 'blur(15px)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-            overflow: 'hidden'
-          }}>
+          <div className="two-panel-layout" style={{ height: '520px' }}>
             {/* Left Panel - History Items (30%) */}
-            <div className="left-panel panel-transition" style={{
-              width: '30%',
-              borderRight: '2px solid rgba(102, 126, 234, 0.2)',
-              padding: '18px',
-              overflowY: 'auto',
-              backgroundColor: 'rgba(248, 250, 252, 0.9)',
-              backdropFilter: 'blur(10px)'
-            }}>
+            <div className="left-panel panel-transition" style={{ padding: '18px', overflowY: 'auto' }}>
               {filteredHistory.length === 0 ? (
                 <div style={{
                   padding: '40px 20px',
@@ -343,13 +206,7 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
             </div>
             
             {/* Right Panel - Detailed Content (70%) */}
-            <div className="right-panel panel-transition" style={{
-              width: '70%',
-              padding: '24px',
-              overflowY: 'auto',
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(10px)'
-            }}>
+            <div className="right-panel panel-transition" style={{ padding: '24px', overflowY: 'auto' }}>
               {selectedEntry ? (
                 <div className="content-fade-in">
                   {/* Header */}
@@ -394,67 +251,11 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
                       </div>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <button
-                        onClick={() => onPasteFromHistory(selectedEntry.id)}
-                        style={{
-                          padding: '12px 24px',
-                          background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          boxShadow: '0 4px 16px rgba(76, 175, 80, 0.3)',
-                          transition: 'all 0.3s ease',
-                          transform: 'translateY(0)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}
-                        onMouseEnter={(e) => {
-                          addHoverEffect(e.target as HTMLElement);
-                          (e.target as HTMLElement).style.transform = 'translateY(-2px)';
-                          (e.target as HTMLElement).style.boxShadow = '0 6px 24px rgba(76, 175, 80, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          removeHoverEffect(e.target as HTMLElement);
-                          (e.target as HTMLElement).style.transform = 'translateY(0)';
-                          (e.target as HTMLElement).style.boxShadow = '0 4px 16px rgba(76, 175, 80, 0.3)';
-                        }}
-                      >
+                    <div className="row-center gap-16">
+                      <button className="btn btn-primary btn-lg" onClick={() => onPasteFromHistory(selectedEntry.id)}>
                         📋 Copy to Clipboard
                       </button>
-                      <button
-                        onClick={() => onDeleteEntry(selectedEntry.id)}
-                        style={{
-                          padding: '12px 24px',
-                          background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          boxShadow: '0 4px 16px rgba(244, 67, 54, 0.3)',
-                          transition: 'all 0.3s ease',
-                          transform: 'translateY(0)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}
-                        onMouseEnter={(e) => {
-                          addHoverEffect(e.target as HTMLElement);
-                          (e.target as HTMLElement).style.transform = 'translateY(-2px)';
-                          (e.target as HTMLElement).style.boxShadow = '0 6px 24px rgba(244, 67, 54, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          removeHoverEffect(e.target as HTMLElement);
-                          (e.target as HTMLElement).style.transform = 'translateY(0)';
-                          (e.target as HTMLElement).style.boxShadow = '0 4px 16px rgba(244, 67, 54, 0.3)';
-                        }}
-                      >
+                      <button className="btn btn-danger btn-lg" onClick={() => onDeleteEntry(selectedEntry.id)}>
                         🗑️ Delete
                       </button>
                     </div>
@@ -569,20 +370,7 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
           </div>
 
           {/* Statistics */}
-          <div style={{
-            marginTop: '24px',
-            padding: '20px',
-            background: 'rgba(248, 250, 252, 0.9)',
-            borderRadius: '16px',
-            border: '1px solid rgba(102, 126, 234, 0.2)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: '#718096',
-            backdropFilter: 'blur(10px)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)'
-          }}>
+          <div className="surface row-between" style={{ marginTop: '24px', padding: '20px' }}>
             <span style={{
               display: 'flex',
               alignItems: 'center',

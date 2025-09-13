@@ -1,6 +1,7 @@
 import React from 'react';
 import { GlobalShortcutProps } from '../types';
 import { commonStyles } from '../utils';
+import { getShortcutLabel, getPrimaryModifierKey } from '../utils/platform';
 
 const GlobalShortcut: React.FC<GlobalShortcutProps> = ({ shortcutStatus }) => {
   return (
@@ -17,7 +18,7 @@ const GlobalShortcut: React.FC<GlobalShortcutProps> = ({ shortcutStatus }) => {
         </div>
         <div>
           <h2 style={{ margin: 0, color: '#2d3748', fontSize: '22px', fontWeight: '800' }}>Quick Capture</h2>
-          <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Press Cmd+Shift+C anywhere</p>
+          <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Press {getShortcutLabel()} anywhere</p>
         </div>
       </div>
       
@@ -84,7 +85,7 @@ const GlobalShortcut: React.FC<GlobalShortcutProps> = ({ shortcutStatus }) => {
             fontWeight: '600',
             marginRight: '4px',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-          }}>Cmd</kbd>
+          }}>{getPrimaryModifierKey()}</kbd>
           <span style={{ margin: '0 4px' }}>+</span>
           <kbd style={{
             background: 'linear-gradient(45deg, #667eea, #764ba2)',

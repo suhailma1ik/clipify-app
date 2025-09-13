@@ -87,8 +87,9 @@ const getFrontendConfig = (environment: Environment) => {
   
   if (environment === 'production') {
     const config = {
-      // Prefer explicit website base URL if provided; fallback to previous var
-      baseUrl: (import.meta.env as any).VITE_WEBSITE_BASE_URL || import.meta.env.VITE_PROD_BASE_URL || 'https://clipify0.el.r.appspot.com/',
+      // Prefer explicit website base URL if provided; fallback to public website domain
+      // IMPORTANT: Do not default to API host here; this must be the website domain
+      baseUrl: (import.meta.env as any).VITE_WEBSITE_BASE_URL || import.meta.env.VITE_PROD_BASE_URL || 'https://clipify.space/',
       port: parseInt(import.meta.env.VITE_PROD_PORT || '5173')
     };
     console.log('[EnvironmentService] Production frontend config:', config);

@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { statusMessages } from '../utils/statusUtils';
 
 export const useShortcutStatus = () => {
   const [shortcutStatus, setShortcutStatus] = useState<string>(
-    "Global shortcut Cmd+Shift+C ready to capture text"
+    statusMessages.ready
   );
 
   return {

@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import "./App.css";
 
 // Import components and utilities
+import Header from "./components/Header";
 import {
   NotificationBanner,
   ManualRephraseSection,
   AuthManager,
   HotkeyPermissionManager,
+  ClipboardHistory,
 } from "./components";
-import { appStyles } from "./styles/AppStyles";
 import {
   useNotification,
   useClipboardHistory,
@@ -25,7 +26,23 @@ function App() {
   // Use custom hooks for state management
   const { notification, showNotification, clearNotification } =
     useNotification();
-  const { loadClipboardHistory } = useClipboardHistory();
+  const {
+    clipboardHistory,
+    searchQuery,
+    setSearchQuery,
+    filteredHistory,
+    selectedEntry,
+    setSelectedEntry,
+    showHistory,
+    setShowHistory,
+    loadClipboardHistory,
+    searchClipboardHistory,
+    deleteHistoryEntry,
+    clearAllHistory,
+    pasteFromHistory,
+    startClipboardMonitoring,
+    stopClipboardMonitoring
+  } = useClipboardHistory();
   const { setCleanedText } = useTextProcessing(
     showNotification,
     loadClipboardHistory
@@ -107,13 +124,16 @@ function App() {
 
 
   return (
-    <main className="container" style={appStyles.mainContainer}>
+    <main className="container">
+      <Header />
       <NotificationBanner
         notification={notification}
         onDismiss={clearNotification}
       />
 
-      {!isAuthenticated && <AuthManager showUserInfo={true} compact={false} />}
+      {!isAuthenticated && (
+        <AuthManager showUserInfo={true} compact={false} className="card card-hover" />
+      )}
 
       {/* Hotkey Permission Manager */}
       <HotkeyPermissionManager 
@@ -134,6 +154,43 @@ function App() {
           rephrasedText={rephrasedText}
           isRephrasingManual={isRephrasingManual}
           onRephrase={handleManualRephrase}
+        />
+      )}
+
+      {/* Clipboard Monitoring Controls */}
+      {isAuthenticated && (
+        <div className="card card-hover mt-16">
+          <h3>Clipboard Monitoring</h3>
+          <div className="row-center gap-12 mb-16">
+            <button className="btn btn-primary" onClick={startClipboardMonitoring}>
+              Start Monitoring
+            </button>
+            <button className="btn btn-danger" onClick={stopClipboardMonitoring}>
+              Stop Monitoring
+            </button>
+          </div>
+          <p>Start monitoring to automatically track clipboard changes and build history.</p>
+        </div>
+      )}
+
+      {/* Clipboard History */}
+      {isAuthenticated && (
+        <ClipboardHistory
+          clipboardHistory={clipboardHistory}
+          searchQuery={searchQuery}
+          filteredHistory={filteredHistory}
+          selectedEntry={selectedEntry}
+          showHistory={showHistory}
+          onSearchQueryChange={(query) => {
+            setSearchQuery(query);
+            searchClipboardHistory(query);
+          }}
+          onSelectEntry={setSelectedEntry}
+          onToggleHistory={() => setShowHistory(!showHistory)}
+          onDeleteEntry={deleteHistoryEntry}
+          onClearAllHistory={clearAllHistory}
+          onRefreshHistory={loadClipboardHistory}
+          onPasteFromHistory={pasteFromHistory}
         />
       )}
 

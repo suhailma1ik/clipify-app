@@ -1,8 +1,10 @@
+import { getShortcutLabel } from "./platform";
+
 /**
  * Generate status messages for different operations
  */
 export const statusMessages = {
-  ready: "Global shortcut Cmd+Shift+C ready to capture text",
+  ready: `Global shortcut ${getShortcutLabel()} ready to capture text`,
   rephrasing: "🔄 Rephrasing text...",
   rephrasingManual: "🔄 Rephrasing manual text...",
   success: (timestamp: string) => `✅ Text rephrased and copied! ${timestamp}`,

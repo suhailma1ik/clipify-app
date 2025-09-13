@@ -161,16 +161,16 @@ pub fn load_history_from_file() -> io::Result<ClipboardHistory> {
     let file_path = get_history_file_path()?;
 
     if !file_path.exists() {
-        return Ok(ClipboardHistory::new(10)); // Default max 10 entries
+        return Ok(ClipboardHistory::new(100)); // Default max 100 entries
     }
 
     let json_data = fs::read_to_string(file_path)?;
     let mut history: ClipboardHistory = serde_json::from_str(&json_data)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    // Ensure max_entries is set to 10 if not present in old files
+    // Ensure max_entries is set to 100 if not present in old files
     if history.max_entries == 0 {
-        history.max_entries = 10;
+        history.max_entries = 100;
     }
 
     Ok(history)

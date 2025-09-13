@@ -1,5 +1,4 @@
 import React from 'react';
-import { appStyles, buttons } from '../styles/AppStyles';
 
 interface ManualRephraseSectionProps {
   manualText: string;
@@ -17,62 +16,46 @@ const ManualRephraseSection: React.FC<ManualRephraseSectionProps> = ({
   onRephrase
 }) => {
   return (
-    <div style={appStyles.card}>
-      <div style={{
-        ...appStyles.rowBetween,
-        marginBottom: '16px'
-      }}>
-        <div style={appStyles.rowCenter}>
-          <div style={appStyles.iconBox}>
-            <span style={appStyles.iconLarge}>✏️</span>
+    <div className="card card-hover">
+      <div className="row-between mb-16">
+        <div className="row-center gap-12">
+          <div className="btn-icon" style={{ borderRadius: 10, background: "var(--color-surface-2)", border: "1px solid var(--color-border)", boxShadow: "var(--shadow-sm)" }}>
+            <span style={{ fontSize: 20 }}>✏️</span>
           </div>
           <div>
-            <h3 style={appStyles.h3Title}>Manual Rephrase</h3>
-            <p style={appStyles.mutedText}>Paste your text here and click to rephrase it</p>
+            <h3>Manual Rephrase</h3>
+            <p className="text-muted">Paste your text here and click to rephrase it</p>
           </div>
         </div>
       </div>
 
-      <div style={{ marginBottom: '16px' }}>
+      <div className="mb-16">
         <textarea
+          className="input"
           value={manualText}
           onChange={(e) => setManualText(e.target.value)}
           placeholder="Paste your text here to rephrase it..."
-          style={{
-            ...appStyles.input,
-            minHeight: '120px',
-            resize: 'vertical',
-            fontFamily: 'inherit'
-          }}
+          style={{ minHeight: 120, resize: 'vertical' }}
         />
       </div>
 
-      <div style={appStyles.rowBetween}>
+      <div className="row-between">
         <div style={{ flex: 1 }}>
           {rephrasedText && (
-            <div style={{ marginBottom: '16px' }}>
-              <h4 style={{ ...appStyles.mutedText, marginBottom: '8px' }}>Rephrased Text:</h4>
-              <div style={{
-                padding: '12px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                border: '1px solid #e9ecef',
-                fontFamily: 'inherit'
-              }}>
+            <div className="mb-16">
+              <h4 className="text-muted" style={{ marginBottom: 8 }}>Rephrased Text:</h4>
+              <div className="surface text-mono" style={{ padding: 12 }}>
                 {rephrasedText}
               </div>
             </div>
           )}
         </div>
 
-        <div style={appStyles.rowGap12}>
+        <div className="row-center gap-12">
           <button
+            className="btn btn-primary btn-lg"
             onClick={onRephrase}
             disabled={isRephrasingManual || !manualText.trim()}
-            style={buttons.primary({
-              large: true,
-              disabled: isRephrasingManual || !manualText.trim()
-            })}
           >
             {isRephrasingManual ? (
               <>

@@ -56,6 +56,8 @@ class AuthService {
       await this.tokenStorage.initialize();
       await this.checkExistingAuth();
       await this.setupDeepLinkListener();
+      // Process any deep links that might have arrived before the listener was attached
+      await this.processPendingDeepLinks();
     } catch (error) {
       getLoggingService().error('auth', 'Failed to initialize auth service', error as Error);
       this.updateAuthState({ error: 'Failed to initialize authentication' });
@@ -100,6 +102,39 @@ class AuthService {
       getLoggingService().info('auth', 'Deep link listener registered');
     } catch (error) {
       getLoggingService().error('auth', 'Failed to setup deep link listener', error as Error);
+    }
+  }
+
+  /**
+   * Process any deep link events that may have been received before the frontend listener attached.
+   * This avoids race conditions on startup and is especially useful on Windows.
+   */
+  private async processPendingDeepLinks(): Promise<void> {
+    try {
+      // Ask backend for any unprocessed deep link events
+      const pending: Array<{ id: string; url: string; processed: boolean }>
+        = await invoke('get_pending_deep_link_events');
+
+      if (!pending || pending.length === 0) {
+        getLoggingService().info('auth', 'No pending deep link events found');
+        return;
+      }
+
+      getLoggingService().info('auth', 'Processing pending deep link events', { count: pending.length });
+
+      for (const evt of pending) {
+        try {
+          await this.handleDeepLinkCallback(evt.url);
+          // Mark as processed if handler succeeded
+          await invoke('mark_deep_link_event_processed', { eventId: evt.id });
+        } catch (e) {
+          // Mark with error for diagnostics
+          const message = e instanceof Error ? e.message : String(e);
+          await invoke('mark_deep_link_event_error', { eventId: evt.id, error: message });
+        }
+      }
+    } catch (error) {
+      getLoggingService().warn('auth', 'Failed to process pending deep link events', error as Error);
     }
   }
 
@@ -273,11 +308,12 @@ class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      // Open website login with redirect to our app's deep link scheme from config
+      // Open the OAuth login endpoint directly (more reliable cross-platform)
       const config = getEnvironmentConfig();
-      const websiteBase = (config.frontend.baseUrl || '').replace(/\/$/, '');
+      const oauthBase = (config.oauth.baseUrl || '').replace(/\/$/, '');
       const redirectScheme = config.oauth.redirectUri; // e.g., clipify://auth/callback
-      const loginUrl = `${websiteBase}/login?redirect=${encodeURIComponent(redirectScheme)}`;
+      // Include client_type=desktop to help backend format response appropriately
+      const loginUrl = `${oauthBase}?client_type=desktop&redirect=${encodeURIComponent(redirectScheme)}`;
       
       getLoggingService().info('auth', 'Starting authentication flow via website', { loginUrl });
       await notificationService.info('Authentication', 'Opening website for authentication...');

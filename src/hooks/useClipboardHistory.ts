@@ -96,6 +96,36 @@ export const useClipboardHistory = () => {
     }
   }, []);
 
+  const startClipboardMonitoring = useCallback(async () => {
+    if (!isTauriEnvironment()) {
+      console.warn('Clipboard monitoring not available in browser environment');
+      return;
+    }
+    
+    try {
+      await invoke('start_clipboard_monitoring');
+      console.log('Clipboard monitoring started successfully');
+    } catch (error) {
+      console.error('Failed to start clipboard monitoring:', error);
+      throw error;
+    }
+  }, []);
+
+  const stopClipboardMonitoring = useCallback(async () => {
+    if (!isTauriEnvironment()) {
+      console.warn('Clipboard monitoring not available in browser environment');
+      return;
+    }
+    
+    try {
+      await invoke('stop_clipboard_monitoring');
+      console.log('Clipboard monitoring stopped successfully');
+    } catch (error) {
+      console.error('Failed to stop clipboard monitoring:', error);
+      throw error;
+    }
+  }, []);
+
   return {
     clipboardHistory,
     searchQuery,
@@ -109,6 +139,8 @@ export const useClipboardHistory = () => {
     searchClipboardHistory,
     deleteHistoryEntry,
     clearAllHistory,
-    pasteFromHistory
+    pasteFromHistory,
+    startClipboardMonitoring,
+    stopClipboardMonitoring
   };
 };

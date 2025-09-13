@@ -49,38 +49,30 @@ export const AuthManager: React.FC<AuthManagerProps> = ({
 
   if (compact) {
     return (
-      <div className={`auth-manager-compact ${className}`}>
+      <div className={`auth-manager-compact row-center gap-12 card ${className}`}>
         {isAuthenticated ? (
-          <div className="auth-status authenticated">
-            <span className="status-indicator">🟢</span>
-            <span className="status-text">Authenticated</span>
+          <div className="row-center gap-8">
+            <span>🟢</span>
+            <span>Authenticated</span>
             {!isLoading && (
-              <button
-                onClick={handleLogout}
-                className="logout-btn"
-                title="Logout"
-              >
+              <button onClick={handleLogout} className="btn btn-danger btn-sm" title="Logout">
                 Logout
               </button>
             )}
           </div>
         ) : (
-          <div className="auth-status unauthenticated">
-            <span className="status-indicator">🔴</span>
-            <span className="status-text">Not authenticated</span>
+          <div className="row-center gap-8">
+            <span>🔴</span>
+            <span>Not authenticated</span>
             {!isLoading && (
-              <button
-                onClick={handleLogin}
-                className="login-btn"
-                title="Login"
-              >
+              <button onClick={handleLogin} className="btn btn-primary btn-sm" title="Login">
                 Login
               </button>
             )}
           </div>
         )}
         {isLoading && (
-          <div className="loading-indicator">
+          <div className="row-center gap-8">
             <span>⏳</span>
           </div>
         )}
@@ -89,313 +81,79 @@ export const AuthManager: React.FC<AuthManagerProps> = ({
   }
 
   return (
-    <div className={`auth-manager ${className}`}>
-      <div className="auth-header">
-        <h3>Authentication</h3>
-        <div className={`auth-status ${isAuthenticated ? 'authenticated' : 'unauthenticated'}`}>
-          <span className="status-indicator">
-            {isAuthenticated ? '🟢' : '🔴'}
-          </span>
-          <span className="status-text">
+    <div className={`auth-manager card card-hover ${className}`}>
+      <div className="row-between">
+        <h3 style={{ margin: 0 }}>Authentication</h3>
+        <div className="row-center gap-8">
+          <span>{isAuthenticated ? '🟢' : '🔴'}</span>
+          <span className={`badge ${isAuthenticated ? 'badge-success' : 'badge-danger'}`}>
             {isAuthenticated ? 'Authenticated' : 'Not authenticated'}
           </span>
         </div>
       </div>
 
       {error && (
-        <div className="auth-error">
-          <div className="error-message">
-            <span className="error-icon">⚠️</span>
-            <span>{error}</span>
+        <div className="card" style={{ borderColor: 'rgba(239, 68, 68, 0.28)' }}>
+          <div className="row-between">
+            <div className="row-center gap-8" style={{ color: '#991b1b' }}>
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+            <button onClick={handleClearError} className="btn btn-ghost btn-sm">✕</button>
           </div>
-          <button onClick={handleClearError} className="clear-error-btn">
-            ✕
-          </button>
         </div>
       )}
 
       {isLoading && (
-        <div className="auth-loading">
-          <div className="loading-spinner">⏳</div>
-          <span>Processing authentication...</span>
+        <div className="card row-center gap-12">
+          <div style={{ animation: 'spin 1s linear infinite' }}>⏳</div>
+          <span className="text-muted">Processing authentication...</span>
         </div>
       )}
 
       {showUserInfo && user && (
-        <div className="user-info">
-          <div className="user-details">
-            <div className="user-avatar">
+        <div className="surface" style={{ padding: 16, borderRadius: 12 }}>
+          <div className="row-center gap-12">
+            <div style={{ width: 40, height: 40, borderRadius: '50%', overflow: 'hidden', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               {user.avatar ? (
-                <img src={user.avatar} alt="User avatar" />
+                <img src={user.avatar} alt="User avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div className="avatar-placeholder">
+                <div className="row-center" style={{ width: '100%', height: '100%', justifyContent: 'center', color: 'var(--color-muted)', fontWeight: 700 }}>
                   {user.name ? user.name.charAt(0).toUpperCase() : '👤'}
                 </div>
               )}
             </div>
-            <div className="user-text">
-              {user.name && <div className="user-name">{user.name}</div>}
-              <div className="user-email">{user.email}</div>
+            <div>
+              {user.name && <div style={{ fontWeight: 600 }}>{user.name}</div>}
+              <div className="text-muted" style={{ fontSize: 14 }}>{user.email}</div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="auth-actions">
+      <div style={{ marginBottom: 16 }}>
         {isAuthenticated ? (
-          <button
-            onClick={handleLogout}
-            disabled={isLoading}
-            className="auth-btn logout-btn"
-          >
+          <button onClick={handleLogout} disabled={isLoading} className="btn btn-danger" style={{ width: '100%' }}>
             {isLoading ? 'Logging out...' : 'Logout'}
           </button>
         ) : (
-          <button
-            onClick={handleLogin}
-            disabled={isLoading}
-            className="auth-btn login-btn"
-          >
+          <button onClick={handleLogin} disabled={isLoading} className="btn btn-primary" style={{ width: '100%' }}>
             {isLoading ? 'Opening browser...' : 'Login with Browser'}
           </button>
         )}
       </div>
 
-      <div className="auth-help">
+      <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
         <details>
-          <summary>How does authentication work?</summary>
-          <div className="help-content">
-            <p>
-              1. Click "Login with Browser" to open your default web browser
-            </p>
-            <p>
-              2. Complete authentication in the browser (Google OAuth or email/password)
-            </p>
-            <p>
-              3. The browser will redirect back to this app automatically
-            </p>
-            <p>
-              4. Your authentication will be securely stored for future use
-            </p>
+          <summary className="text-muted" style={{ cursor: 'pointer' }}>How does authentication work?</summary>
+          <div className="text-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <p>1. Click "Login with Browser" to open your default web browser</p>
+            <p>2. Complete authentication in the browser (Google OAuth or email/password)</p>
+            <p>3. The browser will redirect back to this app automatically</p>
+            <p>4. Your authentication will be securely stored for future use</p>
           </div>
         </details>
       </div>
-
-      <style>{`
-        .auth-manager {
-          padding: 20px;
-          border: 1px solid #e0e0e0;
-          border-radius: 8px;
-          background: #fafafa;
-          max-width: 400px;
-        }
-
-        .auth-manager-compact {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 12px;
-          border: 1px solid #e0e0e0;
-          border-radius: 6px;
-          background: #fafafa;
-        }
-
-        .auth-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .auth-header h3 {
-          margin: 0;
-          color: #333;
-        }
-
-        .auth-status {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 14px;
-        }
-
-        .auth-status.authenticated .status-text {
-          color: #22c55e;
-        }
-
-        .auth-status.unauthenticated .status-text {
-          color: #ef4444;
-        }
-
-        .auth-error {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 12px;
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          border-radius: 6px;
-          margin-bottom: 16px;
-        }
-
-        .error-message {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #dc2626;
-          font-size: 14px;
-        }
-
-        .clear-error-btn {
-          background: none;
-          border: none;
-          color: #dc2626;
-          cursor: pointer;
-          padding: 4px;
-          border-radius: 4px;
-        }
-
-        .clear-error-btn:hover {
-          background: #fecaca;
-        }
-
-        .auth-loading {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px;
-          background: #f0f9ff;
-          border: 1px solid #bae6fd;
-          border-radius: 6px;
-          margin-bottom: 16px;
-          color: #0369a1;
-        }
-
-        .loading-spinner {
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .user-info {
-          padding: 16px;
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          margin-bottom: 16px;
-        }
-
-        .user-details {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .user-avatar img {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .avatar-placeholder {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: #e2e8f0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: bold;
-          color: #64748b;
-        }
-
-        .user-name {
-          font-weight: 600;
-          color: #1e293b;
-          margin-bottom: 2px;
-        }
-
-        .user-email {
-          font-size: 14px;
-          color: #64748b;
-        }
-
-        .auth-actions {
-          margin-bottom: 16px;
-        }
-
-        .auth-btn {
-          width: 100%;
-          padding: 12px 16px;
-          border: none;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .auth-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .login-btn {
-          background: #3b82f6;
-          color: white;
-        }
-
-        .login-btn:hover:not(:disabled) {
-          background: #2563eb;
-        }
-
-        .logout-btn {
-          background: #ef4444;
-          color: white;
-        }
-
-        .logout-btn:hover:not(:disabled) {
-          background: #dc2626;
-        }
-
-        .auth-manager-compact .logout-btn,
-        .auth-manager-compact .login-btn {
-          padding: 4px 8px;
-          font-size: 12px;
-          width: auto;
-        }
-
-        .auth-help {
-          border-top: 1px solid #e2e8f0;
-          padding-top: 16px;
-        }
-
-        .auth-help summary {
-          cursor: pointer;
-          color: #64748b;
-          font-size: 14px;
-          margin-bottom: 8px;
-        }
-
-        .help-content {
-          font-size: 13px;
-          color: #64748b;
-          line-height: 1.5;
-        }
-
-        .help-content p {
-          margin: 8px 0;
-        }
-
-        .loading-indicator {
-          display: flex;
-          align-items: center;
-        }
-      `}</style>
     </div>
   );
 };

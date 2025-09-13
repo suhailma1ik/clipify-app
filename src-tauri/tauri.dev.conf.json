@@ -11,12 +11,6 @@
   },
   "app": {
     "withGlobalTauri": false,
-    "trayIcon": {
-      "iconPath": "icons/32x32.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false,
-      "tooltip": "Clipify Dev - Professional Text Cleanup Tool"
-    },
     "windows": [
       {
         "title": "Clipify Dev",
@@ -45,7 +39,7 @@
       "all": true
     },
     "deep-link": {
-      "schemes": ["clipify-dev", "clipify"]
+      "schemes": ["clipify-dev", "clipify", "appclipify"]
     }
   },
   "bundle": {

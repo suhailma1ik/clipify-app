@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { isTauriEnvironment } from '../utils';
+import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { isTauriEnvironment } from "../utils";
 
 interface PermissionStatus {
   accessibility_granted: boolean;
@@ -22,13 +22,14 @@ interface UseHotkeyPermissionReturn {
 }
 
 export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
-  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus | null>(null);
+  const [permissionStatus, setPermissionStatus] =
+    useState<PermissionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const checkPermissions = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      console.warn('Permission checking not available in browser environment');
+      console.warn("Permission checking not available in browser environment");
       return;
     }
 
@@ -36,25 +37,29 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
     setError(null);
 
     try {
-      console.log('🔍 Checking accessibility permissions and shortcut status...');
-      
+      console.log(
+        "🔍 Checking accessibility permissions and shortcut status..."
+      );
+
       // Check accessibility permissions using backend
       let accessibilityGranted = false;
       try {
-        await invoke('check_accessibility_permissions');
+        await invoke("check_accessibility_permissions");
         accessibilityGranted = true;
       } catch (err) {
-        console.log('Accessibility permissions not granted:', err);
+        console.log("Accessibility permissions not granted:", err);
         accessibilityGranted = false;
       }
 
       // Check if shortcut is registered using Tauri v2 API
       let shortcutRegistered = false;
       try {
-        const { isRegistered } = await import('@tauri-apps/plugin-global-shortcut');
-        shortcutRegistered = await isRegistered('CommandOrControl+Shift+C');
+        const { isRegistered } = await import(
+          "@tauri-apps/plugin-global-shortcut"
+        );
+        shortcutRegistered = await isRegistered("CommandOrControl+Shift+C");
       } catch (err) {
-        console.log('Could not check shortcut registration:', err);
+        console.log("Could not check shortcut registration:", err);
         shortcutRegistered = false;
       }
 
@@ -63,14 +68,14 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
         shortcut_registered: shortcutRegistered,
         can_register_shortcut: accessibilityGranted,
         error_message: null,
-        needs_restart: false
+        needs_restart: false,
       };
 
-      console.log('✅ Permission status received:', status);
+      console.log("✅ Permission status received:", status);
       setPermissionStatus(status);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('❌ Failed to check permissions:', errorMessage);
+      console.error("❌ Failed to check permissions:", errorMessage);
       setError(errorMessage);
       setPermissionStatus(null);
     } finally {
@@ -80,7 +85,7 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
 
   const requestPermissions = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      console.warn('Permission request not available in browser environment');
+      console.warn("Permission request not available in browser environment");
       return;
     }
 
@@ -88,27 +93,27 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
     setError(null);
 
     try {
-      console.log('🔐 Requesting input monitoring permission...');
-      
+      console.log("🔐 Requesting input monitoring permission...");
+
       // First, try to trigger input monitoring permission prompt
       try {
-        await invoke('request_input_monitoring_permission');
-        console.log('✅ Input monitoring permission check completed');
+        await invoke("request_input_monitoring_permission");
+        console.log("✅ Input monitoring permission check completed");
       } catch (inputErr) {
-        console.log('Input monitoring permission needed:', inputErr);
+        console.log("Input monitoring permission needed:", inputErr);
       }
-      
-      console.log('🔐 Opening accessibility settings...');
-      await invoke('open_accessibility_settings');
-      console.log('✅ Accessibility settings opened successfully');
-      
+
+      console.log("🔐 Opening accessibility settings...");
+      await invoke("open_accessibility_settings");
+      console.log("✅ Accessibility settings opened successfully");
+
       // Wait a moment then refresh status
       setTimeout(() => {
         checkPermissions();
       }, 2000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('❌ Failed to request permissions:', errorMessage);
+      console.error("❌ Failed to request permissions:", errorMessage);
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -117,7 +122,9 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
 
   const registerShortcut = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      console.warn('Shortcut registration not available in browser environment');
+      console.warn(
+        "Shortcut registration not available in browser environment"
+      );
       return;
     }
 
@@ -125,32 +132,39 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
     setError(null);
 
     try {
-      console.log('⌨️ Registering global shortcut using Tauri v2 API...');
-      
-      // Use Tauri v2 frontend API instead of backend commands
-      const { register, isRegistered, unregister } = await import('@tauri-apps/plugin-global-shortcut');
+      console.log("⌨️ Registering global shortcut using Tauri v2 API...");
 
-      const shortcut = 'CommandOrControl+Shift+C';
+      // Use Tauri v2 frontend API instead of backend commands
+      const { register, isRegistered, unregister } = await import(
+        "@tauri-apps/plugin-global-shortcut"
+      );
+
+      const shortcut = "CommandOrControl+Shift+C";
 
       // If already registered (by us or another instance), try to unregister first
       try {
         const already = await isRegistered(shortcut);
         if (already) {
-          console.log(`Shortcut ${shortcut} already registered. Attempting to unregister before re-registering...`);
+          console.log(
+            `Shortcut ${shortcut} already registered. Attempting to unregister before re-registering...`
+          );
           await unregister(shortcut);
         }
       } catch (preErr) {
-        console.warn('Could not check/unregister existing shortcut before registering:', preErr);
+        console.warn(
+          "Could not check/unregister existing shortcut before registering:",
+          preErr
+        );
       }
 
       const doRegister = async () => {
         await register(shortcut, (event) => {
-          console.log('Global shortcut triggered:', event);
-          if (event.state === 'Pressed') {
+          console.log("Global shortcut triggered:", event);
+          if (event.state === "Pressed") {
             // Trigger the clipboard copy and clean functionality
             // Use the proper command that handles the state internally
-            invoke('trigger_clipboard_copy').catch(err => {
-              console.error('Failed to copy selected text:', err);
+            invoke("trigger_clipboard_copy").catch((err) => {
+              console.error("Failed to copy selected text:", err);
             });
           }
         });
@@ -161,31 +175,43 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
       } catch (regErr) {
         const msg = regErr instanceof Error ? regErr.message : String(regErr);
         // If registration failed due to previous binding, force unregister and retry once
-        if (msg.includes('RegisterEventHotKey failed')) {
-          console.warn('RegisterEventHotKey failed. Attempting to unregister existing binding and retry once...');
+        if (msg.includes("RegisterEventHotKey failed")) {
+          console.warn(
+            "RegisterEventHotKey failed. Attempting to unregister existing binding and retry once..."
+          );
           try {
             await unregister(shortcut);
           } catch (unregErr) {
-            console.warn('Unregister on failure also failed (may not be previously registered by us):', unregErr);
+            console.warn(
+              "Unregister on failure also failed (may not be previously registered by us):",
+              unregErr
+            );
           }
           await doRegister();
         } else {
           throw regErr;
         }
       }
-      
-      console.log('✅ Global shortcut registered successfully using Tauri v2 API');
-      
+
+      console.log(
+        "✅ Global shortcut registered successfully using Tauri v2 API"
+      );
+
       // Refresh status after registration
       await checkPermissions();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('❌ Failed to register global shortcut:', errorMessage);
+      console.error("❌ Failed to register global shortcut:", errorMessage);
       setError(errorMessage);
-      
+
       // If it's a permission error, suggest opening settings
-      if (errorMessage.includes('permission') || errorMessage.includes('accessibility')) {
-        console.log('🔧 Permission error detected, user may need to grant accessibility permissions');
+      if (
+        errorMessage.includes("permission") ||
+        errorMessage.includes("accessibility")
+      ) {
+        console.log(
+          "🔧 Permission error detected, user may need to grant accessibility permissions"
+        );
       }
     } finally {
       setIsLoading(false);
@@ -194,17 +220,17 @@ export const useHotkeyPermission = (): UseHotkeyPermissionReturn => {
 
   const openAccessibilitySettings = useCallback(async () => {
     if (!isTauriEnvironment()) {
-      console.warn('Settings opening not available in browser environment');
+      console.warn("Settings opening not available in browser environment");
       return;
     }
 
     try {
-      console.log('🔧 Opening accessibility settings...');
-      await invoke('open_accessibility_settings');
-      console.log('✅ Accessibility settings opened');
+      console.log("🔧 Opening accessibility settings...");
+      await invoke("open_accessibility_settings");
+      console.log("✅ Accessibility settings opened");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('❌ Failed to open accessibility settings:', errorMessage);
+      console.error("❌ Failed to open accessibility settings:", errorMessage);
       setError(errorMessage);
     }
   }, []);

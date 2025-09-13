@@ -9,4 +9,3 @@ export { useAuthTokenSync } from './useAuthTokenSync';
 export { useHotkeyPermission } from './useHotkeyPermission';
 
 export { useAuth } from './useAuth';
-export { getAuthenticatedApiClient } from '../services/authenticatedApiClient';
