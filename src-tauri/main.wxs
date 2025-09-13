@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="{{product_name}}" Language="1033" Version="{{version}}" Manufacturer="{{manufacturer}}" UpgradeCode="{{upgrade_code}}">
+    <Package InstallerVersion="450" Compressed="yes" InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="{{product_name}}" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!-- Registry entries for deep link protocol registration -->
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="DeepLinkProtocolRegistration" Guid="*">
+        <!-- Register clipify:// protocol -->
+        <RegistryKey Root="HKCR" Key="clipify">
+          <RegistryValue Type="string" Value="URL:Clipify Protocol" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify\DefaultIcon">
+          <RegistryValue Type="string" Value="[INSTALLDIR]{{main_binary_name}}.exe,0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify\shell">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify\shell\open">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[INSTALLDIR]{{main_binary_name}}.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+
+        <!-- Register appclipify:// protocol -->
+        <RegistryKey Root="HKCR" Key="appclipify">
+          <RegistryValue Type="string" Value="URL:App Clipify Protocol" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="appclipify\DefaultIcon">
+          <RegistryValue Type="string" Value="[INSTALLDIR]{{main_binary_name}}.exe,0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="appclipify\shell">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="appclipify\shell\open">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="appclipify\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[INSTALLDIR]{{main_binary_name}}.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+
+        <!-- Register clipify-dev:// protocol for development builds -->
+        <RegistryKey Root="HKCR" Key="clipify-dev">
+          <RegistryValue Type="string" Value="URL:Clipify Dev Protocol" />
+          <RegistryValue Name="URL Protocol" Type="string" Value="" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify-dev\DefaultIcon">
+          <RegistryValue Type="string" Value="[INSTALLDIR]{{main_binary_name}}.exe,0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify-dev\shell">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify-dev\shell\open">
+        </RegistryKey>
+        <RegistryKey Root="HKCR" Key="clipify-dev\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[INSTALLDIR]{{main_binary_name}}.exe&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <!-- Add the protocol registration component to the main feature -->
+    <Feature Id="ProductFeature" Title="{{product_name}}" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="DeepLinkProtocolRegistration" />
+    </Feature>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="{{program_files_folder}}" Name="PFiles">
+        <Directory Id="INSTALLDIR" Name="{{product_name}}" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
+      <!-- This will be populated by Tauri with the main binary and other files -->
+    </ComponentGroup>
+  </Fragment>
+</Wix>

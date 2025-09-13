@@ -219,24 +219,61 @@ fn verify_protocol_registration(scheme: &str) -> ProtocolRegistrationStatus {
         use std::process::Command;
         
         // On Windows, check the registry for protocol handlers
-        let output = Command::new("reg")
+        // First check if the protocol key exists
+        let protocol_check = Command::new("reg")
             .args(&["query", &format!("HKEY_CLASSES_ROOT\\{}", scheme), "/ve"])
             .output();
             
-        match output {
+        match protocol_check {
             Ok(output) => {
-                let is_registered = output.status.success();
-                
-                ProtocolRegistrationStatus {
-                    scheme: scheme.to_string(),
-                    is_registered,
-                    error: None,
+                if output.status.success() {
+                    // Protocol key exists, now check if it has the URL Protocol value
+                    let url_protocol_check = Command::new("reg")
+                        .args(&["query", &format!("HKEY_CLASSES_ROOT\\{}", scheme), "/v", "URL Protocol"])
+                        .output();
+                    
+                    match url_protocol_check {
+                        Ok(url_output) => {
+                            let has_url_protocol = url_output.status.success();
+                            
+                            // Also check if command handler exists
+                            let command_check = Command::new("reg")
+                                .args(&["query", &format!("HKEY_CLASSES_ROOT\\{}\\shell\\open\\command", scheme), "/ve"])
+                                .output();
+                            
+                            let has_command_handler = command_check.map_or(false, |cmd_output| cmd_output.status.success());
+                            
+                            let is_fully_registered = has_url_protocol && has_command_handler;
+                            
+                            ProtocolRegistrationStatus {
+                                scheme: scheme.to_string(),
+                                is_registered: is_fully_registered,
+                                error: if !is_fully_registered {
+                                    Some(format!("Protocol partially registered - URL Protocol: {}, Command Handler: {}", 
+                                        has_url_protocol, has_command_handler))
+                                } else {
+                                    None
+                                },
+                            }
+                        }
+                        Err(e) => ProtocolRegistrationStatus {
+                            scheme: scheme.to_string(),
+                            is_registered: false,
+                            error: Some(format!("Failed to check URL Protocol value: {}", e)),
+                        }
+                    }
+                } else {
+                    ProtocolRegistrationStatus {
+                        scheme: scheme.to_string(),
+                        is_registered: false,
+                        error: Some("Protocol key not found in registry".to_string()),
+                    }
                 }
             }
             Err(e) => ProtocolRegistrationStatus {
                 scheme: scheme.to_string(),
                 is_registered: false,
-                error: Some(format!("Failed to check protocol registration: {}", e)),
+                error: Some(format!("Failed to access Windows registry: {}", e)),
             }
         }
     }
@@ -313,6 +350,48 @@ async fn verify_deep_link_protocols() -> Result<DeepLinkDiagnostics, String> {
 #[tauri::command]
 async fn check_protocol_registration(scheme: String) -> Result<ProtocolRegistrationStatus, String> {
     Ok(verify_protocol_registration(&scheme))
+}
+
+/**
+ * Tauri command to manually register a protocol on Windows (requires admin privileges)
+ */
+#[tauri::command]
+async fn register_protocol_windows(scheme: String, app_path: String) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        
+        // Create registry entries for the protocol
+        let commands = vec![
+            // Create main protocol key
+            format!("reg add \"HKEY_CLASSES_ROOT\\{}\" /ve /d \"URL:{} Protocol\" /f", scheme, scheme),
+            // Add URL Protocol marker
+            format!("reg add \"HKEY_CLASSES_ROOT\\{}\" /v \"URL Protocol\" /d \"\" /f", scheme),
+            // Set default icon
+            format!("reg add \"HKEY_CLASSES_ROOT\\{}\\DefaultIcon\" /ve /d \"{},0\" /f", scheme, app_path),
+            // Create command handler
+            format!("reg add \"HKEY_CLASSES_ROOT\\{}\\shell\\open\\command\" /ve /d \"\"{}\" \"%1\"\" /f", scheme, app_path),
+        ];
+        
+        for cmd_str in commands {
+            let output = Command::new("cmd")
+                .args(&["/C", &cmd_str])
+                .output()
+                .map_err(|e| format!("Failed to execute registry command: {}", e))?;
+                
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("Registry command failed: {}\nCommand: {}", stderr, cmd_str));
+            }
+        }
+        
+        Ok(format!("Successfully registered {} protocol", scheme))
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Protocol registration is only supported on Windows".to_string())
+    }
 }
 
 /**
@@ -919,6 +998,7 @@ pub fn run() {
              // Deep link commands
              verify_deep_link_protocols,
              check_protocol_registration,
+             register_protocol_windows,
              get_pending_deep_link_events,
              get_all_deep_link_events,
              mark_deep_link_event_processed,
