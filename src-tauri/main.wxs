@@ -8,6 +8,7 @@
 
     <Feature Id="ProductFeature" Title="{{product_name}}" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="DeepLinkProtocolRegistration" />
     </Feature>
 
     <!-- Registry entries for deep link protocol registration -->
@@ -63,11 +64,7 @@
       </Component>
     </DirectoryRef>
 
-    <!-- Add the protocol registration component to the main feature -->
-    <Feature Id="ProductFeature" Title="{{product_name}}" Level="1">
-      <ComponentGroupRef Id="ProductComponents" />
-      <ComponentRef Id="DeepLinkProtocolRegistration" />
-    </Feature>
+
   </Product>
 
   <Fragment>
