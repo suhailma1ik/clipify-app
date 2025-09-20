@@ -5,9 +5,7 @@ import "./App.css";
 import Header from "./components/Header";
 import {
   NotificationBanner,
-  ManualRephraseSection,
   AuthManager,
-  HotkeyPermissionManager,
   ClipboardHistory,
 } from "./components";
 import {
@@ -15,7 +13,6 @@ import {
   useClipboardHistory,
   useTextProcessing,
   useAutoRephrase,
-  useManualRephrase,
   useClipboardMonitoring,
   useShortcutStatus,
   useAuth,
@@ -33,15 +30,11 @@ function App() {
     filteredHistory,
     selectedEntry,
     setSelectedEntry,
-    showHistory,
-    setShowHistory,
     loadClipboardHistory,
     searchClipboardHistory,
     deleteHistoryEntry,
     clearAllHistory,
     pasteFromHistory,
-    startClipboardMonitoring,
-    stopClipboardMonitoring
   } = useClipboardHistory();
   const { setCleanedText } = useTextProcessing(
     showNotification,
@@ -60,17 +53,17 @@ function App() {
   });
 
   // Manual rephrase functionality (for UI-based rephrasing)
-  const {
-    manualText,
-    setManualText,
-    rephrasedText,
-    isRephrasingManual,
-    handleManualRephrase,
-  } = useManualRephrase({
-    isAuthenticated,
-    showNotification,
-    setShortcutStatus,
-  });
+  // const {
+  //   manualText,
+  //   setManualText,
+  //   rephrasedText,
+  //   isRephrasingManual,
+  //   handleManualRephrase,
+  // } = useManualRephrase({
+  //   isAuthenticated,
+  //   showNotification,
+  //   setShortcutStatus,
+  // });
 
   // Clipboard monitoring functionality (event-driven via Cmd+Shift+C global shortcut)
   const { setupClipboardMonitoring } = useClipboardMonitoring({
@@ -135,8 +128,20 @@ function App() {
         <AuthManager showUserInfo={true} compact={false} className="card card-hover" />
       )}
 
+      {isAuthenticated && (
+        <div className="card card-hover mb-16">
+          <div className="row-between">
+            <div className="row-center gap-8">
+              <span>🟢</span>
+              <span className="badge badge-success">Authenticated</span>
+            </div>
+            <AuthManager showUserInfo={false} compact={true} />
+          </div>
+        </div>
+      )}
+
       {/* Hotkey Permission Manager */}
-      <HotkeyPermissionManager 
+      {/* <HotkeyPermissionManager 
         onPermissionGranted={() => {
           console.log('Accessibility permissions granted');
         }}
@@ -145,9 +150,9 @@ function App() {
           // Retry clipboard monitoring setup after shortcut registration
           setupClipboardMonitoring();
         }}
-      />
+      /> */}
       {/* Manual Text Rephrase Section - Only show when authenticated */}
-      {isAuthenticated && (
+      {/* {isAuthenticated && (
         <ManualRephraseSection
           manualText={manualText}
           setManualText={setManualText}
@@ -155,10 +160,10 @@ function App() {
           isRephrasingManual={isRephrasingManual}
           onRephrase={handleManualRephrase}
         />
-      )}
+      )} */}
 
       {/* Clipboard Monitoring Controls */}
-      {isAuthenticated && (
+      {/* {isAuthenticated && (
         <div className="card card-hover mt-16">
           <h3>Clipboard Monitoring</h3>
           <div className="row-center gap-12 mb-16">
@@ -171,7 +176,7 @@ function App() {
           </div>
           <p>Start monitoring to automatically track clipboard changes and build history.</p>
         </div>
-      )}
+      )} */}
 
       {/* Clipboard History */}
       {isAuthenticated && (
@@ -180,13 +185,11 @@ function App() {
           searchQuery={searchQuery}
           filteredHistory={filteredHistory}
           selectedEntry={selectedEntry}
-          showHistory={showHistory}
           onSearchQueryChange={(query) => {
             setSearchQuery(query);
             searchClipboardHistory(query);
           }}
           onSelectEntry={setSelectedEntry}
-          onToggleHistory={() => setShowHistory(!showHistory)}
           onDeleteEntry={deleteHistoryEntry}
           onClearAllHistory={clearAllHistory}
           onRefreshHistory={loadClipboardHistory}

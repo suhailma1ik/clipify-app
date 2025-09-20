@@ -7,10 +7,8 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
   searchQuery,
   filteredHistory,
   selectedEntry,
-  showHistory,
   onSearchQueryChange,
   onSelectEntry,
-  onToggleHistory,
   onDeleteEntry,
   onClearAllHistory,
   onRefreshHistory,
@@ -39,15 +37,15 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
               fontWeight: '700',
               letterSpacing: '-0.5px'
             }}>📋 Clipboard History</h3>
-            <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Last 10 copied items • Flycut-style interface</p>
+            <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>Last 10 copied items • Clipboard history</p>
           </div>
         </div>
-        <button onClick={onToggleHistory} className="btn btn-primary btn-lg">
+        {/* <button onClick={onToggleHistory} className="btn btn-primary btn-lg">
           {showHistory ? '🙈 Hide History' : '👁️ Show History'}
-        </button>
+        </button> */}
       </div>
 
-      {showHistory && (
+      {/* {showHistory && ( */}
         <>
           {/* Search and Controls */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
@@ -399,7 +397,7 @@ const ClipboardHistory: React.FC<ClipboardHistoryProps> = ({
             )}
           </div>
         </>
-      )}
+      {/* )} */}
     </div>
   );
 };

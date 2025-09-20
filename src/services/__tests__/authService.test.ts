@@ -12,6 +12,13 @@ import { getEnvironmentConfig } from '../environmentService';
 // Mock dependencies
 vi.mock('@tauri-apps/api/core');
 vi.mock('@tauri-apps/plugin-shell');
+// Mock Tauri event API for deep-link listener
+const mockListen = vi.fn();
+const mockUnlisten = vi.fn();
+let capturedDeepLinkHandler: ((event: { payload: string }) => void) | null = null;
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: (...args: any[]) => mockListen(...args),
+}));
 vi.mock('../secureTokenStorage');
 vi.mock('../notificationService');
 vi.mock('../loggingService');
@@ -44,6 +51,12 @@ const mockEnvironmentConfig = {
   api: {
     baseUrl: 'http://localhost:8080',
   },
+  frontend: {
+    baseUrl: 'http://localhost:5173/',
+  },
+  oauth: {
+    redirectUri: 'clipify://auth/callback',
+  },
 };
 
 const mockInvoke = vi.fn();
@@ -65,8 +78,16 @@ describe('AuthService', () => {
     // Mock Tauri APIs
     const { invoke } = await import('@tauri-apps/api/core');
     const { open } = await import('@tauri-apps/plugin-shell');
+    const { listen } = await import('@tauri-apps/api/event');
     vi.mocked(invoke).mockImplementation(mockInvoke);
     vi.mocked(open).mockImplementation(mockOpen);
+    mockListen.mockReset();
+    mockUnlisten.mockReset();
+    capturedDeepLinkHandler = null;
+    vi.mocked(listen as any).mockImplementation((_eventName: string, handler: any) => {
+      capturedDeepLinkHandler = handler;
+      return Promise.resolve(mockUnlisten);
+    });
     
     // Setup default mock responses
     mockTokenStorage.initialize.mockResolvedValue(undefined);
@@ -97,9 +118,7 @@ describe('AuthService', () => {
     });
 
     it('should setup deep link listener', () => {
-      expect(mockInvoke).toHaveBeenCalledWith('register_deep_link_handler', {
-        callback: expect.any(Function),
-      });
+      expect(mockListen).toHaveBeenCalledWith('deep-link-received', expect.any(Function));
     });
 
     it('should handle initialization errors gracefully', async () => {
@@ -149,14 +168,14 @@ describe('AuthService', () => {
       
       expect(mockLoggingService.info).toHaveBeenCalledWith(
         'auth',
-        'Starting authentication flow',
-        { authUrl: 'http://localhost:8080/api/v1/auth/desktop-login' }
+        'Starting authentication flow via website login page',
+        { loginUrl: 'http://localhost:5173/login?redirect=clipify%3A%2F%2Fauth%2Fcallback' }
       );
       expect(mockNotificationService.info).toHaveBeenCalledWith(
         'Authentication',
         'Opening browser for authentication...'
       );
-      expect(mockOpen).toHaveBeenCalledWith('http://localhost:8080/api/v1/auth/desktop-login');
+      expect(mockOpen).toHaveBeenCalledWith('http://localhost:5173/login?redirect=clipify%3A%2F%2Fauth%2Fcallback');
     });
 
     it('should handle login errors gracefully', async () => {
@@ -192,23 +211,15 @@ describe('AuthService', () => {
 
   describe('deep link callback handling', () => {
     it('should handle successful auth callback', async () => {
-      const callbackUrl = 'appclipify://auth/callback?access_token=test-token&refresh_token=refresh-token&user=%7B%22id%22%3A%22user123%22%2C%22email%22%3A%22user%40example.com%22%7D';
+      const callbackUrl = 'clipify://auth/callback?token=test-token&refresh_token=refresh-token&user=%7B%22id%22%3A%22user123%22%2C%22email%22%3A%22user%40example.com%22%7D';
       
-      // Simulate deep link callback
-      const handleCallback = vi.fn();
-      mockInvoke.mockImplementation((command, options) => {
-        if (command === 'register_deep_link_handler') {
-          handleCallback.mockImplementation(options.callback);
-          return Promise.resolve(undefined);
-        }
-        return Promise.resolve(undefined);
-      });
-      
+      // New instance to capture the deep-link listener
       new AuthService();
       await new Promise(resolve => setTimeout(resolve, 10));
       
-      // Trigger callback
-      await handleCallback(callbackUrl);
+      // Trigger deep link event via Tauri listener
+      expect(capturedDeepLinkHandler).toBeTruthy();
+      await capturedDeepLinkHandler!({ payload: callbackUrl });
       
       expect(mockTokenStorage.storeTokenInfo).toHaveBeenCalledWith({
         accessToken: 'test-token',
@@ -230,49 +241,34 @@ describe('AuthService', () => {
     });
 
     it('should handle callback with error parameter', async () => {
-      const callbackUrl = 'appclipify://auth/callback?error=access_denied&error_description=User%20denied%20access';
+      const callbackUrl = 'clipify://auth/callback?error=access_denied&error_description=User%20denied%20access';
       
-      const handleCallback = vi.fn();
-      mockInvoke.mockImplementation((command, options) => {
-        if (command === 'register_deep_link_handler') {
-          handleCallback.mockImplementation(options.callback);
-          return Promise.resolve(undefined);
-        }
-        return Promise.resolve(undefined);
-      });
-      
-      const newAuthService = new AuthService();
+      const svc = new AuthService();
       await new Promise(resolve => setTimeout(resolve, 10));
       
       // Trigger callback with error
-      await handleCallback(callbackUrl);
+      expect(capturedDeepLinkHandler).toBeTruthy();
+      await capturedDeepLinkHandler!({ payload: callbackUrl });
       
+      // Error message now includes specific reason
       expect(mockNotificationService.error).toHaveBeenCalledWith(
         'Authentication Failed',
-        'Authentication failed. Please try again.'
+        expect.stringContaining('Auth error: access_denied - User denied access')
       );
       
-      const authState = newAuthService.getAuthState();
-      expect(authState.error).toBe('Authentication failed. Please try again.');
+      const authState = svc.getAuthState();
+      expect(authState.error).toContain('Auth error: access_denied - User denied access');
     });
 
     it('should handle malformed callback URLs', async () => {
       const callbackUrl = 'invalid-url';
       
-      const handleCallback = vi.fn();
-      mockInvoke.mockImplementation((command, options) => {
-        if (command === 'register_deep_link_handler') {
-          handleCallback.mockImplementation(options.callback);
-          return Promise.resolve(undefined);
-        }
-        return Promise.resolve(undefined);
-      });
-      
       new AuthService();
       await new Promise(resolve => setTimeout(resolve, 10));
       
       // Trigger callback with invalid URL
-      await handleCallback(callbackUrl);
+      expect(capturedDeepLinkHandler).toBeTruthy();
+      await capturedDeepLinkHandler!({ payload: callbackUrl });
       
       expect(mockLoggingService.error).toHaveBeenCalledWith(
         'auth',
@@ -288,15 +284,12 @@ describe('AuthService', () => {
       mockTokenStorage.getAccessToken.mockResolvedValue('test-token');
       
       // Mock successful fetch
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-      });
-      
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
       await authService.logout();
-      
+
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:8080/auth/logout',
+        'http://localhost:8080/api/v1/auth/logout',
         {
           method: 'POST',
           headers: {
@@ -305,7 +298,7 @@ describe('AuthService', () => {
           },
         }
       );
-      
+
       expect(mockTokenStorage.clearAllTokens).toHaveBeenCalled();
       expect(mockNotificationService.success).toHaveBeenCalledWith(
         'Logout',
@@ -420,8 +413,8 @@ describe('AuthService', () => {
   describe('cleanup', () => {
     it('should cleanup resources properly', async () => {
       await authService.cleanup();
-      
-      expect(mockInvoke).toHaveBeenCalledWith('unregister_deep_link_handler');
+      // Verify the unlisten function returned by listen() was called
+      expect(mockUnlisten).toHaveBeenCalled();
       expect(mockLoggingService.info).toHaveBeenCalledWith(
         'auth',
         'Auth service cleanup completed'

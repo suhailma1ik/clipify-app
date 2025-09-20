@@ -90,8 +90,7 @@ start "clipify://auth?token=test_token&user_id=test_user&email=test@example.com&
 
 ### Tauri Configuration
 - `src-tauri/tauri.conf.json` - Added deep link schemes
-- `src-tauri/tauri.dev.conf.json` - Added development deep link schemes  
-- `src-tauri/tauri.prod.conf.json` - Added production deep link schemes
+- `src-tauri/tauri.dev.conf.json` - Added development deep link schemes
 
 ### Authentication Service
 - `src/services/authService.ts` - Fixed deep link handling

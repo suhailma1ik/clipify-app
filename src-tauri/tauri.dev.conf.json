@@ -39,7 +39,7 @@
       "all": true
     },
     "deep-link": {
-      "schemes": ["clipify-dev", "clipify", "appclipify"]
+      "schemes": [ "clipify"]
     }
   },
   "bundle": {

@@ -44,10 +44,8 @@ export interface ClipboardHistoryProps {
   searchQuery: string;
   filteredHistory: ClipboardEntry[];
   selectedEntry: ClipboardEntry | null;
-  showHistory: boolean;
   onSearchQueryChange: (query: string) => void;
   onSelectEntry: (entry: ClipboardEntry | null) => void;
-  onToggleHistory: () => void;
   onDeleteEntry: (id: string) => void;
   onClearAllHistory: () => void;
   onRefreshHistory: () => void;

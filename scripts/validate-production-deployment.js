@@ -91,7 +91,6 @@ function validateTauriConfiguration() {
   
   const tauriConfigs = [
     'src-tauri/tauri.conf.json',
-    'src-tauri/tauri.prod.conf.json',
     'src-tauri/Cargo.toml'
   ];
 

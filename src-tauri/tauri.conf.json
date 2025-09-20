@@ -35,12 +35,11 @@
   },
   "plugins": {
     "deep-link": {
-      "schemes": ["clipify", "appclipify"]
+      "schemes": ["clipify"]
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -56,27 +55,14 @@
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15",
-      "exceptionDomain": "",
       "entitlements": "entitlements.plist",
-      "providerShortName": null,
       "signingIdentity": null
     },
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": "",
       "wix": {
-        "language": "en-US",
-        "template": "main.wxs",
-        "fragmentPaths": [],
-        "componentGroupRefs": [],
-        "componentRefs": [],
-        "featureGroupRefs": [],
-        "featureRefs": [],
-        "mergeRefs": [],
-        "enableElevatedUpdateTask": false,
-        "bannerPath": null,
-        "dialogImagePath": null
+        "language": "en-US"
       }
     }
   }

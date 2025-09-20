@@ -308,19 +308,18 @@ class AuthService {
     try {
       this.updateAuthState({ isLoading: true, error: null });
       
-      // Open the OAuth login endpoint directly (more reliable cross-platform)
+      // Open the website login page with redirect back to the desktop app
       const config = getEnvironmentConfig();
-      const oauthBase = (config.oauth.baseUrl || '').replace(/\/$/, '');
-      const redirectScheme = config.oauth.redirectUri; // e.g., clipify://auth/callback
-      // Include client_type=desktop to help backend format response appropriately
-      const loginUrl = `${oauthBase}?client_type=desktop&redirect=${encodeURIComponent(redirectScheme)}`;
-      
-      getLoggingService().info('auth', 'Starting authentication flow via website', { loginUrl });
+      const websiteBase = (config.frontend.baseUrl || '').replace(/\/$/, '');
+      const redirectUri = config.oauth.redirectUri; // e.g., clipify://auth/callback
+      const loginUrl = `${websiteBase}/login?redirect=${encodeURIComponent(redirectUri)}`;
+
+      getLoggingService().info('auth', 'Starting authentication flow via website login page', { loginUrl });
       await notificationService.info('Authentication', 'Opening website for authentication...');
-      
+
       // Open browser to website login URL
       await open(loginUrl);
-      
+
       getLoggingService().info('auth', 'Browser opened for authentication');
     } catch (error) {
       getLoggingService().error('auth', 'Failed to start authentication', error as Error);
