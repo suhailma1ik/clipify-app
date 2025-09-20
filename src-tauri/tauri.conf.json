@@ -35,7 +35,9 @@
   },
   "plugins": {
     "deep-link": {
-      "schemes": ["clipify"]
+      "desktop": {
+        "schemes": ["clipify"]
+      }
     }
   },
   "bundle": {

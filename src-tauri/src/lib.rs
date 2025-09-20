@@ -597,11 +597,12 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_http::init())
         // Ensure a single running instance and forward deep-link URLs from secondary invocations
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            println!("[SingleInstance] Received args: {:?}", args);
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            println!("[SingleInstance] Received args: {:?}", argv);
+            // when defining deep link schemes at runtime, you must also check `argv` here
             // Extract any deep link URLs from the arguments and forward them as runtime events
             let schemes = ["clipify://", "clipify-dev://", "appclipify://"]; 
-            for arg in args {
+            for arg in argv {
                 if schemes.iter().any(|s| arg.starts_with(s)) {
                     let url_str = arg.clone();
                     println!("[SingleInstance] Forwarding deep link URL: {}", url_str);
