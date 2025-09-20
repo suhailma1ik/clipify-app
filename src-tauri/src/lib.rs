@@ -596,7 +596,9 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_http::init())
-        // Ensure a single running instance and forward deep-link URLs from secondary invocations
+        // Initialize deep link plugin FIRST to register protocol handlers
+        .plugin(tauri_plugin_deep_link::init())
+        // Then ensure a single running instance and forward deep-link URLs from secondary invocations
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             println!("[SingleInstance] Received args: {:?}", argv);
             // when defining deep link schemes at runtime, you must also check `argv` here
@@ -639,7 +641,6 @@ pub fn run() {
                 }
             }
         }))
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new()
             .with_handler(|app, shortcut, event| {
                 println!("Global shortcut triggered: {shortcut:?} with event {event:?}");
