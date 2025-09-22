@@ -77,6 +77,10 @@ class AuthService {
           user: userInfo as AuthUser | null,
           error: null,
         });
+        // DEV-only: console the stored user info found on startup
+        if (userInfo && (import.meta as any)?.env?.DEV) {
+          console.log('[Auth] Existing stored user info:', userInfo);
+        }
         getLoggingService().info('auth', 'Existing authentication found');
       }
     } catch (error) {
@@ -158,6 +162,16 @@ class AuthService {
       // Store the tokens
       await this.storeAuthTokens(callbackData);
       getLoggingService().info('auth', 'Successfully stored authentication tokens');
+
+      // DEV-only: console the user info we stored on login
+      try {
+        const storedUser = await this.tokenStorage.getUserInfo();
+        if ((import.meta as any)?.env?.DEV) {
+          console.log('[Auth] Stored user info after login:', storedUser);
+        }
+      } catch (e) {
+        // Best-effort logging; ignore failures
+      }
 
       // Update auth state
       this.updateAuthState({

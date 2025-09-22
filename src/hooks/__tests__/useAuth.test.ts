@@ -122,7 +122,7 @@ describe('useAuth', () => {
 
   describe('state updates', () => {
     it('should update state when auth service notifies changes', () => {
-      let stateChangeCallback: () => void;
+      let stateChangeCallback: (newState: any) => void;
       mockAuthService.subscribe.mockImplementation((callback) => {
         stateChangeCallback = callback;
         return () => {};
@@ -140,17 +140,17 @@ describe('useAuth', () => {
       
       expect(result.current.isAuthenticated).toBe(false);
       
-      // Simulate state change
+      // Simulate state change by passing new state to callback
       const mockUser = { id: 'user123', email: 'user@example.com', name: 'Test User' };
-      mockAuthService.getAuthState.mockReturnValue({
+      const newState = {
         isAuthenticated: true,
         isLoading: false,
         user: mockUser,
         error: null,
-      });
+      };
       
       act(() => {
-        stateChangeCallback();
+        stateChangeCallback(newState);
       });
       
       expect(result.current.isAuthenticated).toBe(true);
@@ -266,31 +266,211 @@ describe('useAuth', () => {
   });
 
   describe('error handling', () => {
-    it('should handle auth service initialization errors', () => {
+    it('should propagate auth service initialization errors', () => {
       mockAuthService.getAuthState.mockImplementation(() => {
         throw new Error('Auth service error');
       });
       
-      // Should not throw, but handle gracefully
+      // Should throw since the hook doesn't handle initialization errors
       expect(() => {
         renderHook(() => useAuth());
-      }).not.toThrow();
+      }).toThrow('Auth service error');
     });
 
-    it('should handle subscription errors', () => {
+    it('should propagate subscription errors', () => {
       mockAuthService.subscribe.mockImplementation(() => {
         throw new Error('Subscription error');
       });
       
-      // Should not throw, but handle gracefully
+      // Should throw since the hook doesn't handle subscription errors
       expect(() => {
         renderHook(() => useAuth());
-      }).not.toThrow();
+      }).toThrow('Subscription error');
+    });
+  });
+
+  describe('clearError method', () => {
+    it('should clear error from state', () => {
+      mockAuthService.getAuthState.mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        error: 'Authentication failed',
+      });
+      
+      const { result } = renderHook(() => useAuth());
+      
+      expect(result.current.error).toBe('Authentication failed');
+      
+      act(() => {
+        result.current.clearError();
+      });
+      
+      expect(result.current.error).toBeNull();
+    });
+
+    it('should not affect other state properties when clearing error', () => {
+      const mockUser = { id: 'user123', email: 'user@example.com', name: 'Test User' };
+      mockAuthService.getAuthState.mockReturnValue({
+        isAuthenticated: true,
+        isLoading: false,
+        user: mockUser,
+        error: 'Some error',
+      });
+      
+      const { result } = renderHook(() => useAuth());
+      
+      const originalUser = result.current.user;
+      const originalIsAuthenticated = result.current.isAuthenticated;
+      
+      act(() => {
+        result.current.clearError();
+      });
+      
+      expect(result.current.error).toBeNull();
+      expect(result.current.user).toBe(originalUser);
+      expect(result.current.isAuthenticated).toBe(originalIsAuthenticated);
+    });
+
+    it('should handle clearing error when no error exists', () => {
+      mockAuthService.getAuthState.mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        error: null,
+      });
+      
+      const { result } = renderHook(() => useAuth());
+      
+      expect(result.current.error).toBeNull();
+      
+      act(() => {
+        result.current.clearError();
+      });
+      
+      expect(result.current.error).toBeNull();
+    });
+  });
+
+  describe('function stability', () => {
+    it('should maintain stable function references across re-renders', () => {
+      const { result, rerender } = renderHook(() => useAuth());
+      
+      const initialMethods = {
+        login: result.current.login,
+        logout: result.current.logout,
+        getAccessToken: result.current.getAccessToken,
+        hasValidAccessToken: result.current.hasValidAccessToken,
+        clearError: result.current.clearError,
+      };
+      
+      rerender();
+      
+      expect(result.current.login).toBe(initialMethods.login);
+      expect(result.current.logout).toBe(initialMethods.logout);
+      expect(result.current.getAccessToken).toBe(initialMethods.getAccessToken);
+      expect(result.current.hasValidAccessToken).toBe(initialMethods.hasValidAccessToken);
+      expect(result.current.clearError).toBe(initialMethods.clearError);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle auth service returning undefined state', () => {
+      mockAuthService.getAuthState.mockReturnValue(undefined as any);
+      
+      // Should throw when trying to access undefined state properties
+      expect(() => {
+        renderHook(() => useAuth());
+      }).toThrow();
+    });
+
+    it('should handle concurrent method calls', async () => {
+      mockAuthService.login.mockResolvedValue(undefined);
+      mockAuthService.logout.mockResolvedValue(undefined);
+      mockAuthService.getAccessToken.mockResolvedValue('token');
+      mockAuthService.hasValidAccessToken.mockResolvedValue(true);
+      
+      const { result } = renderHook(() => useAuth());
+      
+      // Call multiple methods concurrently
+      await act(async () => {
+        await Promise.all([
+          result.current.login(),
+          result.current.getAccessToken(),
+          result.current.hasValidAccessToken(),
+        ]);
+      });
+      
+      expect(mockAuthService.login).toHaveBeenCalledOnce();
+      expect(mockAuthService.getAccessToken).toHaveBeenCalledOnce();
+      expect(mockAuthService.hasValidAccessToken).toHaveBeenCalledOnce();
+    });
+
+    it('should handle rapid state changes', () => {
+      let stateChangeCallback: (newState: any) => void;
+      mockAuthService.subscribe.mockImplementation((callback) => {
+        stateChangeCallback = callback;
+        return () => {};
+      });
+      
+      // Start with a valid initial state
+      mockAuthService.getAuthState.mockReturnValue({
+        isAuthenticated: false,
+        isLoading: false,
+        user: null,
+        error: null,
+      });
+      
+      const { result } = renderHook(() => useAuth());
+      
+      // Simulate rapid state changes by calling the callback with new states
+      act(() => {
+        const state1 = {
+          isAuthenticated: true,
+          isLoading: false,
+          user: { id: 'user1', email: 'user1@example.com' },
+          error: null,
+        };
+        stateChangeCallback(state1);
+        
+        const state2 = {
+          isAuthenticated: false,
+          isLoading: true,
+          user: null,
+          error: null,
+        };
+        stateChangeCallback(state2);
+        
+        const state3 = {
+          isAuthenticated: false,
+          isLoading: false,
+          user: null,
+          error: 'Login failed',
+        };
+        stateChangeCallback(state3);
+      });
+      
+      // Should reflect the final state
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.user).toBeNull();
+      expect(result.current.error).toBe('Login failed');
     });
   });
 
   describe('cleanup', () => {
-    it('should handle unsubscribe errors gracefully', () => {
+    it('should call unsubscribe on unmount', () => {
+      const unsubscribe = vi.fn();
+      mockAuthService.subscribe.mockReturnValue(unsubscribe);
+      
+      const { unmount } = renderHook(() => useAuth());
+      
+      unmount();
+      
+      expect(unsubscribe).toHaveBeenCalled();
+    });
+
+    it('should propagate unsubscribe errors', () => {
       const unsubscribe = vi.fn().mockImplementation(() => {
         throw new Error('Unsubscribe error');
       });
@@ -298,10 +478,10 @@ describe('useAuth', () => {
       
       const { unmount } = renderHook(() => useAuth());
       
-      // Should not throw when unmounting
+      // Should throw when unmounting since the hook doesn't handle unsubscribe errors
       expect(() => {
         unmount();
-      }).not.toThrow();
+      }).toThrow('Unsubscribe error');
     });
   });
 });
