@@ -1,4 +1,4 @@
-import { getApiClient } from './apiClient';
+import { getApiClient } from "./apiClient";
 
 /**
  * Rephrase API Service
@@ -23,7 +23,7 @@ export class RephraseError extends Error {
 
   constructor(options: { message: string; code?: string; details?: any }) {
     super(options.message);
-    this.name = 'RephraseError';
+    this.name = "RephraseError";
     this.code = options.code;
     this.details = options.details;
 
@@ -48,36 +48,40 @@ export class RephraseService {
     try {
       const apiClient = getApiClient();
       apiClient.setJwtToken(token);
-      console.log('[RephraseService] JWT token updated');
+      console.log("[RephraseService] JWT token updated");
     } catch (error) {
-      console.error('[RephraseService] Failed to set JWT token:', error);
+      console.error("[RephraseService] Failed to set JWT token:", error);
       throw new RephraseError({
-        message: 'Failed to set JWT token - API client not initialized',
-        code: 'API_CLIENT_ERROR'
+        message: "Failed to set JWT token - API client not initialized",
+        code: "API_CLIENT_ERROR",
       });
     }
   }
-
-
 
   /**
    * Count words in text
    */
   public countWords(text: string): number {
-    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+    return text
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
   }
 
   /**
    * Validate text for free plan limits
    */
-  public validateTextForFreePlan(text: string): { isValid: boolean; error?: string } {
+  public validateTextForFreePlan(text: string): {
+    isValid: boolean;
+    error?: string;
+  } {
     const wordCount = this.countWords(text);
     const maxWords = 150;
 
     if (wordCount > maxWords) {
       return {
         isValid: false,
-        error: `Text exceeds ${maxWords}-word limit (${wordCount} words)`
+        error: `Text exceeds ${maxWords}-word limit (${wordCount} words)`,
       };
     }
 
@@ -89,9 +93,9 @@ export class RephraseService {
    */
   async rephrase(
     text: string,
-    style: string = 'formal',
-    context: string = 'Business communication',
-    target_audience: string = 'Colleagues',
+    style: string = "formal",
+    context: string = "Business communication",
+    target_audience: string = "Colleagues",
     preserve_length: boolean = false
   ): Promise<RephraseResponse> {
     // Validate text for free plan (basic validation)
@@ -99,19 +103,19 @@ export class RephraseService {
     if (!validation.isValid) {
       throw new RephraseError({
         message: validation.error!,
-        code: 'WORD_LIMIT_EXCEEDED'
+        code: "WORD_LIMIT_EXCEEDED",
       });
     }
 
     try {
-      console.log('[RephraseService] Sending rephrase request:', {
+      console.log("[RephraseService] Sending rephrase request:", {
         textLength: text.length,
         wordCount: this.countWords(text),
         style: style,
         context: context,
         target_audience: target_audience,
         preserve_length: preserve_length,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       // Get API client instance
@@ -120,8 +124,8 @@ export class RephraseService {
       // Check if JWT token is available
       if (!apiClient.getJwtToken()) {
         throw new RephraseError({
-          message: 'JWT token is required for rephrasing',
-          code: 'UNAUTHORIZED'
+          message: "JWT token is required for rephrasing",
+          code: "UNAUTHORIZED",
         });
       }
 
@@ -137,14 +141,14 @@ export class RephraseService {
       // Validate response structure
       if (!response.data || !response.data.rephrased_text) {
         throw new RephraseError({
-          message: 'Invalid response format: missing rephrased_text',
-          code: 'INVALID_RESPONSE'
+          message: "Invalid response format: missing rephrased_text",
+          code: "INVALID_RESPONSE",
         });
       }
 
-      console.log('[RephraseService] Rephrase request successful:', {
+      console.log("[RephraseService] Rephrase request successful:", {
         originalLength: text.length,
-        rephrasedLength: response.data.rephrased_text.length
+        rephrasedLength: response.data.rephrased_text.length,
       });
 
       return response.data;
@@ -154,60 +158,64 @@ export class RephraseService {
         throw error;
       }
 
-      console.error('[RephraseService] Request error:', error);
+      console.error("[RephraseService] Request error:", error);
 
       // Handle API client errors
       if (error instanceof Error) {
-        const errorMessage = error.message || '';
-        
-        if (errorMessage.includes('JWT token is required')) {
+        const errorMessage = error.message || "";
+
+        if (errorMessage.includes("JWT token is required")) {
           throw new RephraseError({
-            message: 'JWT token is required for rephrasing',
-            code: 'UNAUTHORIZED'
+            message: "JWT token is required for rephrasing",
+            code: "UNAUTHORIZED",
           });
         }
 
-        if (errorMessage.includes('HTTP 401')) {
+        if (errorMessage.includes("HTTP 401")) {
           throw new RephraseError({
-            message: 'Unauthorized request - invalid or expired token',
-            code: 'UNAUTHORIZED'
+            message: "Unauthorized request - invalid or expired token",
+            code: "UNAUTHORIZED",
           });
         }
 
-        if (errorMessage.includes('HTTP 403')) {
+        if (errorMessage.includes("HTTP 403")) {
           throw new RephraseError({
-            message: 'Access denied',
-            code: 'FORBIDDEN'
+            message: "Access denied",
+            code: "FORBIDDEN",
           });
         }
 
-        if (errorMessage.includes('HTTP 429')) {
+        if (errorMessage.includes("HTTP 429")) {
           throw new RephraseError({
-            message: 'Rate limit exceeded. Please try again later.',
-            code: 'RATE_LIMITED'
+            message: "Quota exceeded. Please try again later.",
+            code: "RATE_LIMITED",
           });
         }
 
-        if (errorMessage.includes('HTTP 5')) {
+        if (errorMessage.includes("HTTP 5")) {
           throw new RephraseError({
-            message: 'Server error. Please try again later.',
-            code: 'SERVER_ERROR'
+            message: "Server error. Please try again later.",
+            code: "SERVER_ERROR",
           });
         }
 
-        if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+        if (
+          errorMessage.includes("fetch") ||
+          errorMessage.includes("network")
+        ) {
           throw new RephraseError({
-            message: 'Network error. Please check your internet connection and try again.',
-            code: 'NETWORK_ERROR',
-            details: error
+            message:
+              "Network error. Please check your internet connection and try again.",
+            code: "NETWORK_ERROR",
+            details: error,
           });
         }
       }
 
       throw new RephraseError({
-        message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        code: 'UNKNOWN_ERROR',
-        details: error
+        message: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        code: "UNKNOWN_ERROR",
+        details: error,
       });
     }
   }
@@ -218,5 +226,5 @@ export const rephraseService = new RephraseService();
 
 // Helper function to check if an object is a RephraseError
 export function isRephraseError(error: any): error is RephraseError {
-  return error && typeof error === 'object' && 'message' in error;
+  return error && typeof error === "object" && "message" in error;
 }

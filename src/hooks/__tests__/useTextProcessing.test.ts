@@ -160,7 +160,8 @@ describe('useTextProcessing', () => {
 
       expect(mockWriteText).toHaveBeenCalledWith(rephrasedText);
       expect(result.current.rephrasedText).toBe(rephrasedText);
-      expect(mockShowNotification).toHaveBeenCalledWith(
+      // Note: Notification is now handled by useAutoRephrase hook to prevent duplicates
+      expect(mockShowNotification).not.toHaveBeenCalledWith(
         'Rephrased text copied to clipboard ✅',
         'success'
       );

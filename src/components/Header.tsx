@@ -12,17 +12,7 @@ interface HeaderProps {
   };
 }
 
-const Header: React.FC<HeaderProps> = ({
-  username = "Guest User",
-  userPlan = "Free Plan",
-  usageStats = {
-    clipboardItems: 0,
-    storageUsed: "0 KB",
-    dailyLimit: 15,
-    dailyUsage: 0,
-  },
-}) => {
-  const usagePercentage = (usageStats.dailyUsage / usageStats.dailyLimit) * 100;
+const Header: React.FC<HeaderProps> = ({ userPlan = "Free Plan" }) => {
   const { isAuthenticated, user } = useAuth();
   return (
     <header className="card card-hover">

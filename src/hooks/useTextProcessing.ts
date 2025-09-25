@@ -45,7 +45,7 @@ export const useTextProcessing = (
       setRephrasedText(response.rephrased_text);
       lastValueRef.current = response.rephrased_text;
 
-      showNotification('Rephrased text copied to clipboard ✅', 'success');
+      // Note: Notification is handled by useAutoRephrase hook to prevent duplicates
 
       // Reload clipboard history to show new entry
       await loadClipboardHistory();

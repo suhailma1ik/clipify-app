@@ -321,11 +321,7 @@ fn verify_protocol_registration(scheme: &str) -> ProtocolRegistrationStatus {
  */
 #[tauri::command]
 async fn verify_deep_link_protocols() -> Result<DeepLinkDiagnostics, String> {
-    let schemes = vec![
-        "clipify".to_string(),
-        "clipify-dev".to_string(),
-        "appclipify".to_string(),
-    ];
+    let schemes = vec!["clipify".to_string()];
     let mut protocols = Vec::new();
     
     for scheme in schemes {
@@ -603,7 +599,7 @@ pub fn run() {
             println!("[SingleInstance] Received args: {:?}", argv);
             // when defining deep link schemes at runtime, you must also check `argv` here
             // Extract any deep link URLs from the arguments and forward them as runtime events
-            let schemes = ["clipify://", "clipify-dev://", "appclipify://"]; 
+            let schemes = ["clipify://"]; 
             for arg in argv {
                 if schemes.iter().any(|s| arg.starts_with(s)) {
                     let url_str = arg.clone();
